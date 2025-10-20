@@ -20,34 +20,35 @@ class _SettingsBodyState extends State<SettingsBody> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Header
+        // 🔵 Header (เหมือน NotificationBody / FavoriteBody)
         Container(
           width: double.infinity,
-          color: const Color.fromARGB(255, 131, 202, 246),
+          color: const Color(0xFF83CAF6),
           child: SafeArea(
             bottom: false,
             child: Container(
-              height: 40,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              height: 80, // 🔹 สูงเท่ากับหน้าการแจ้งเตือน
+              alignment: Alignment.bottomLeft,
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: const Text(
                 'การตั้งค่า',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 25,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
+                  height: 1.0,
                 ),
               ),
             ),
           ),
         ),
 
-        // Body
+        // ⚙️ Body
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Section: Account
+              // 👤 Section: Account
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -76,7 +77,9 @@ class _SettingsBodyState extends State<SettingsBody> {
                           Text(
                             "Kanyaphat",
                             style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold),
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           Text(
                             "user@email.com",
@@ -96,7 +99,7 @@ class _SettingsBodyState extends State<SettingsBody> {
               ),
               const SizedBox(height: 20),
 
-              // Section: App Settings - ภาษา
+              // 🌐 Section: ภาษา
               _buildSettingItem(
                 icon: Icons.language,
                 title: "ภาษา",
@@ -116,7 +119,7 @@ class _SettingsBodyState extends State<SettingsBody> {
                 ),
               ),
 
-              // Section: โหมดแสดงผล - Switch เปิด/ปิด
+              // 🌙 Section: โหมดแสดงผล
               _buildSettingItem(
                 icon: Icons.brightness_6,
                 title: "โหมดแสดงผล",
@@ -139,7 +142,7 @@ class _SettingsBodyState extends State<SettingsBody> {
 
               const SizedBox(height: 20),
 
-              // Section: About
+              // ℹ️ Section: เกี่ยวกับแอป
               _buildSettingItem(
                 icon: Icons.info_outline,
                 title: "เกี่ยวกับแอป",
@@ -150,7 +153,7 @@ class _SettingsBodyState extends State<SettingsBody> {
 
               const SizedBox(height: 20),
 
-              // Logout
+              // 🚪 Logout
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
@@ -165,7 +168,7 @@ class _SettingsBodyState extends State<SettingsBody> {
                   // 🔹 เด้งไปหน้า Login และลบ stack ทั้งหมด
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (context) => LoginScreen()),
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
                     (Route<dynamic> route) => false,
                   );
                 },
@@ -182,6 +185,7 @@ class _SettingsBodyState extends State<SettingsBody> {
     );
   }
 
+  // 🔧 สร้าง Widget สำหรับแต่ละ Setting Item
   Widget _buildSettingItem({
     required IconData icon,
     required String title,
@@ -217,8 +221,11 @@ class _SettingsBodyState extends State<SettingsBody> {
                 ),
               ),
               trailing ??
-                  const Icon(Icons.arrow_forward_ios,
-                      size: 18, color: Colors.grey),
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 18,
+                    color: Colors.grey,
+                  ),
             ],
           ),
         ),
@@ -232,8 +239,9 @@ class _SettingsBodyState extends State<SettingsBody> {
       context: context,
       builder: (context) {
         return Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.8,
             height: 190,
@@ -244,15 +252,21 @@ class _SettingsBodyState extends State<SettingsBody> {
                 children: [
                   const Text(
                     "เกี่ยวกับแอป",
-                    style:
-                        TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  Text("เวอร์ชัน: $appVersion",
-                      style: const TextStyle(fontSize: 16)),
+                  Text(
+                    "เวอร์ชัน: $appVersion",
+                    style: const TextStyle(fontSize: 16),
+                  ),
                   const SizedBox(height: 8),
-                  Text("API Server: $apiIp",
-                      style: const TextStyle(fontSize: 16)),
+                  Text(
+                    "API Server: $apiIp",
+                    style: const TextStyle(fontSize: 16),
+                  ),
                   const Spacer(),
                   Align(
                     alignment: Alignment.centerRight,
@@ -270,3 +284,4 @@ class _SettingsBodyState extends State<SettingsBody> {
     );
   }
 }
+  

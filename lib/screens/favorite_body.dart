@@ -41,34 +41,39 @@ class _FavoriteBodyState extends State<FavoriteBody> {
 
     return Column(
       children: [
-        // Header เต็มขอบบน
+        // 🔵 Header (เหมือน NotificationBody)
         Container(
-          width: double.infinity, // เต็มความกว้าง
-          color: const Color.fromARGB(255, 131, 202, 246),
+          width: double.infinity,
+          color: const Color(0xFF83CAF6),
           child: SafeArea(
-            bottom: false, // ไม่เว้นด้านล่าง
+            bottom: false,
             child: Container(
-              height: 40,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              height: 80, // 🔹 ความสูงเดียวกับหน้า Notification
+              alignment: Alignment.bottomLeft, // 🔹 จัดให้อยู่ชิดล่างของแถบ
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8), // 🔹 ระยะฟอนต์พอดี
               child: const Text(
                 'รายการโปรด',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 25,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
+                  height: 1.0,
                 ),
               ),
             ),
           ),
         ),
-        // Body รายการโปรด
+
+        // 🧾 Body รายการโปรด
         Expanded(
           child: favoriteData.isEmpty
               ? Center(
                   child: Text(
                     'ยังไม่มีรายการโปรด',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                    ),
                   ),
                 )
               : ListView.builder(
@@ -84,7 +89,11 @@ class _FavoriteBodyState extends State<FavoriteBody> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
-                          Navigator.pushNamed(context, '/room', arguments: floorName);
+                          Navigator.pushNamed(
+                            context,
+                            '/room',
+                            arguments: floorName,
+                          );
                         },
                         child: Container(
                           height: 80,
@@ -103,7 +112,8 @@ class _FavoriteBodyState extends State<FavoriteBody> {
                             children: [
                               ClipRRect(
                                 borderRadius: const BorderRadius.horizontal(
-                                    left: Radius.circular(12)),
+                                  left: Radius.circular(12),
+                                ),
                                 child: Image.asset(
                                   floorImage,
                                   width: 80,
@@ -121,8 +131,11 @@ class _FavoriteBodyState extends State<FavoriteBody> {
                                   ),
                                 ),
                               ),
-                              const Icon(Icons.arrow_forward_ios,
-                                  color: Colors.grey, size: 18),
+                              const Icon(
+                                Icons.arrow_forward_ios,
+                                color: Colors.grey,
+                                size: 18,
+                              ),
                               const SizedBox(width: 12),
                             ],
                           ),

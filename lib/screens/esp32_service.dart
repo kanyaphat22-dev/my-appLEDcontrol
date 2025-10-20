@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ESP32Service {
-  // Map ของ roomKey -> IP
+  // 🧩 Map ของ roomKey -> IP (รองรับห้องที่มีสองสวิตช์ด้วย)
   static final Map<String, String> roomIPs = {
-    // ชั้น 5
+    // ====== ชั้น 5 ======
     'F5_Lift': '192.168.1.101',
-    'F5_Hall': '192.168.1.102',
-    'F5_Corridor': '192.168.1.103',
+    'F5_Hall_1': '192.168.1.102',
+    'F5_Hall_2': '192.168.1.102',
+    'F5_Corridor_1': '192.168.1.103',
+    'F5_Corridor_2': '192.168.1.103',
     '66501': '192.168.1.111',
     '66502': '192.168.1.112',
     '66503': '192.168.1.113',
@@ -18,10 +20,12 @@ class ESP32Service {
     '66508': '192.168.1.118',
     '66509': '192.168.1.119',
 
-    // ชั้น 6
+    // ====== ชั้น 6 ======
     'F6_Lift': '192.168.1.201',
-    'F6_Hall': '192.168.1.202',
-    'F6_Corridor': '192.168.1.203',
+    'F6_Hall_1': '192.168.1.202',
+    'F6_Hall_2': '192.168.1.202',
+    'F6_Corridor_1': '192.168.1.203',
+    'F6_Corridor_2': '192.168.1.203',
     '66601': '192.168.1.211',
     '66602': '192.168.1.212',
     '66603': '192.168.1.213',
@@ -32,10 +36,12 @@ class ESP32Service {
     '66608': '192.168.1.218',
     '66609': '192.168.1.219',
 
-    // ชั้น 7
+    // ====== ชั้น 7 ======
     'F7_Lift': '192.168.1.301',
-    'F7_Hall': '192.168.1.302',
-    'F7_Corridor': '192.168.1.303',
+    'F7_Hall_1': '192.168.1.302',
+    'F7_Hall_2': '192.168.1.302',
+    'F7_Corridor_1': '192.168.1.303',
+    'F7_Corridor_2': '192.168.1.303',
     '66701': '192.168.1.311',
     '66702': '192.168.1.312',
     '66703': '192.168.1.313',
@@ -46,10 +52,12 @@ class ESP32Service {
     '66708': '192.168.1.318',
     '66709': '192.168.1.319',
 
-    // ชั้น 8
+    // ====== ชั้น 8 ======
     'F8_Lift': '192.168.1.401',
-    'F8_Hall': '192.168.1.402',
-    'F8_Corridor': '192.168.1.403',
+    'F8_Hall_1': '192.168.1.402',
+    'F8_Hall_2': '192.168.1.402',
+    'F8_Corridor_1': '192.168.1.403',
+    'F8_Corridor_2': '192.168.1.403',
     '66801': '192.168.1.411',
     '66802': '192.168.1.412',
     '66803': '192.168.1.413',
@@ -60,10 +68,12 @@ class ESP32Service {
     '66808': '192.168.1.418',
     '66809': '192.168.1.419',
 
-    // ชั้น 9
+    // ====== ชั้น 9 ======
     'F9_Lift': '192.168.1.501',
-    'F9_Hall': '192.168.1.502',
-    'F9_Corridor': '192.168.1.503',
+    'F9_Hall_1': '192.168.1.502',
+    'F9_Hall_2': '192.168.1.502',
+    'F9_Corridor_1': '192.168.1.503',
+    'F9_Corridor_2': '192.168.1.503',
     '66901': '192.168.1.511',
     '66902': '192.168.1.512',
     '66903': '192.168.1.513',
@@ -74,10 +84,12 @@ class ESP32Service {
     '66908': '192.168.1.518',
     '66909': '192.168.1.519',
 
-    // ชั้น 10
+    // ====== ชั้น 10 ======
     'F10_Lift': '192.168.1.601',
-    'F10_Hall': '192.168.1.602',
-    'F10_Corridor': '192.168.1.603',
+    'F10_Hall_1': '192.168.1.602',
+    'F10_Hall_2': '192.168.1.602',
+    'F10_Corridor_1': '192.168.1.603',
+    'F10_Corridor_2': '192.168.1.603',
     '661001': '192.168.1.611',
     '661002': '192.168.1.612',
     '661003': '192.168.1.613',
@@ -89,45 +101,60 @@ class ESP32Service {
     '661009': '192.168.1.619',
   };
 
-  // ส่งคำสั่งเปิด/ปิดไฟ
+  // ====== ส่งคำสั่งเปิด/ปิดไฟ ======
   static Future<void> sendCommand(String roomKey, bool turnOn) async {
     final ip = roomIPs[roomKey];
     if (ip == null) {
-      print('ไม่พบ IP ของ $roomKey');
+      print('❌ ไม่พบ IP ของ $roomKey');
       return;
     }
-    final command = turnOn ? 'on' : 'off';
+
+    // ตรวจสอบว่าเป็นสวิตช์ที่ 1 หรือ 2
+    final isSwitch2 = roomKey.endsWith('_2');
+    final index = isSwitch2 ? '2' : '1';
+    final command = turnOn ? 'on$index' : 'off$index';
+
     final url = 'http://$ip/$command';
+    print('🌐 ส่งคำสั่งไปที่ $url');
 
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
-        print('ส่ง $command สำเร็จไป $roomKey ($ip)');
+        print('✅ ส่ง $command สำเร็จ ($roomKey → $ip)');
       } else {
-        print('ESP32 ตอบกลับ status: ${response.statusCode}');
+        print('⚠️ ESP32 ตอบกลับ status: ${response.statusCode}');
       }
     } catch (e) {
-      print('เชื่อมต่อ ESP32 ไม่สำเร็จ: $e');
+      print('🚫 เชื่อมต่อ ESP32 ไม่สำเร็จ ($roomKey): $e');
     }
   }
 
-  // ดึงสถานะไฟจริงจาก ESP32
+  // ====== ดึงสถานะไฟจริงจาก ESP32 ======
   static Future<bool> getLightStatus(String roomKey) async {
     final ip = roomIPs[roomKey];
-    if (ip == null) return false;
+    if (ip == null) {
+      print('❌ ไม่พบ IP ของ $roomKey');
+      return false;
+    }
 
-    final url = 'http://$ip/status'; // ESP32 ต้องมี endpoint /status ที่ส่ง JSON { "lightOn": true/false }
+    // ตรวจสอบว่าเป็นหลอดที่ 1 หรือ 2
+    final isSwitch2 = roomKey.endsWith('_2');
+    final index = isSwitch2 ? '2' : '1';
+    final url = 'http://$ip/status$index';
+
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['lightOn'] as bool;
+        final status = data['lightOn'] as bool? ?? false;
+        print('💡 $roomKey สถานะไฟ: ${status ? "เปิด" : "ปิด"}');
+        return status;
       } else {
-        print('ESP32 ตอบกลับ status: ${response.statusCode}');
+        print('⚠️ ESP32 ($roomKey) ตอบกลับ status: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('ไม่สามารถดึงสถานะไฟ $roomKey: $e');
+      print('🚫 ไม่สามารถดึงสถานะไฟ $roomKey: $e');
       return false;
     }
   }

@@ -16,35 +16,39 @@ class _NotificationBodyState extends State<NotificationBody> {
       builder: (context, notifications, _) {
         return Column(
           children: [
-            // Header
+            // 🔵 Header
             Container(
               width: double.infinity,
-              color: const Color.fromARGB(255, 131, 202, 246),
+              color: const Color(0xFF83CAF6),
               child: SafeArea(
                 bottom: false,
                 child: Container(
-                  height: 40,
-                  alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  height: 80, // ✅ ความสูงกำลังดี
+                  alignment: Alignment.bottomLeft, // ✅ ชิดล่างมากขึ้น
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8), // ✅ ดันฟอนต์ลงเล็กน้อย
                   child: const Text(
                     'การแจ้งเตือน',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 25,
+                      fontSize: 26,
                       fontWeight: FontWeight.bold,
+                      height: 1.0,
                     ),
                   ),
                 ),
               ),
             ),
 
-            // Body
+            // 🧾 Body
             Expanded(
               child: notifications.isEmpty
                   ? Center(
                       child: Text(
                         'ยังไม่มีการแจ้งเตือน',
-                        style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                        ),
                       ),
                     )
                   : ListView.builder(
@@ -69,12 +73,16 @@ class _NotificationBodyState extends State<NotificationBody> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.notifications,
-                                    color: Colors.blueAccent, size: 28),
+                                const Icon(
+                                  Icons.notifications,
+                                  color: Colors.blueAccent,
+                                  size: 28,
+                                ),
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         noti["title"]!,
@@ -94,8 +102,11 @@ class _NotificationBodyState extends State<NotificationBody> {
                                     ],
                                   ),
                                 ),
-                                const Icon(Icons.arrow_forward_ios,
-                                    color: Colors.grey, size: 18),
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Colors.grey,
+                                  size: 18,
+                                ),
                               ],
                             ),
                           ),
