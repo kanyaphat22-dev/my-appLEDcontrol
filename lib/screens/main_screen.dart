@@ -67,9 +67,9 @@ class _MainScreenState extends State<MainScreen> {
             layoutBuilder: (currentChild, previousChildren) => currentChild!,
           ),
 
-          // ✅ แถบล่าง (บางลง + ไม่มีเงาเวลากด)
+          // ✅ แถบล่าง (ปรับให้สูงขึ้น + ไอคอนขยับขึ้น)
           bottomNavigationBar: Container(
-            height: 60,
+            height: 72, // ⬆ เพิ่มจาก 60 → 72
             decoration: const BoxDecoration(
               color: Colors.white,
               border: Border(
@@ -88,11 +88,11 @@ class _MainScreenState extends State<MainScreen> {
             ),
             child: Theme(
               data: Theme.of(context).copyWith(
-                splashColor: Colors.transparent, // 🚫 ปิด splash เวลากด
-                highlightColor: Colors.transparent, // 🚫 ปิด highlight เวลากด
-                splashFactory: NoSplash.splashFactory, // 🚫 ปิด ripple effect
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                splashFactory: NoSplash.splashFactory,
                 colorScheme: Theme.of(context).colorScheme.copyWith(
-                      surfaceTint: Colors.transparent, // 🚫 ปิด tint เงา
+                      surfaceTint: Colors.transparent,
                     ),
               ),
               child: BottomNavigationBar(
@@ -102,41 +102,34 @@ class _MainScreenState extends State<MainScreen> {
                 selectedItemColor: Colors.blueAccent,
                 unselectedItemColor: const Color.fromARGB(255, 45, 45, 45),
                 type: BottomNavigationBarType.fixed,
-                iconSize: 26,
-                selectedFontSize: 11,
-                unselectedFontSize: 11,
+                iconSize: 28, // ⬆ ขยายไอคอนเล็กน้อย
+                selectedFontSize: 12, // ⬆ ขนาดฟอนต์เล็กน้อย
+                unselectedFontSize: 12,
                 onTap: _onItemTapped,
                 items: [
-                  BottomNavigationBarItem(
-                    icon: _selectedIndex == 0
-                        ? const Icon(Icons.home)
-                        : const Icon(Icons.home_outlined),
-                    label: 'หน้าหลัก',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: _selectedIndex == 1
-                        ? const Icon(Icons.favorite)
-                        : const Icon(Icons.favorite_border),
-                    label: 'รายการโปรด',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: _selectedIndex == 2
-                        ? const Icon(Icons.notifications)
-                        : const Icon(Icons.notifications_none),
-                    label: 'แจ้งเตือน',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: _selectedIndex == 3
-                        ? const Icon(Icons.settings)
-                        : const Icon(Icons.settings_outlined),
-                    label: 'ตั้งค่า',
-                  ),
+                  _navItem(Icons.home_outlined, Icons.home, 'หน้าหลัก', 0),
+                  _navItem(Icons.favorite_border, Icons.favorite, 'รายการโปรด', 1),
+                  _navItem(Icons.notifications_none, Icons.notifications, 'แจ้งเตือน', 2),
+                  _navItem(Icons.settings_outlined, Icons.settings, 'ตั้งค่า', 3),
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  BottomNavigationBarItem _navItem(
+      IconData outlineIcon, IconData filledIcon, String label, int index) {
+    return BottomNavigationBarItem(
+      icon: Padding(
+        padding: const EdgeInsets.only(bottom: 4.0), // ⬆ ยกไอคอนขึ้นนิดนึง
+        child: Icon(
+          _selectedIndex == index ? filledIcon : outlineIcon,
+        ),
+      ),
+      label: label,
     );
   }
 }

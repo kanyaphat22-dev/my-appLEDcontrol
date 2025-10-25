@@ -2,104 +2,17 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ESP32Service {
-  // 🧩 Map ของ roomKey -> IP (รองรับห้องที่มีสองสวิตช์ด้วย)
+  // 🧩 IP ของห้องทดลองจริง
   static final Map<String, String> roomIPs = {
-    // ====== ชั้น 5 ======
-    'F5_Lift': '192.168.1.101',
-    'F5_Hall_1': '192.168.1.102',
-    'F5_Hall_2': '192.168.1.102',
-    'F5_Corridor_1': '192.168.1.103',
-    'F5_Corridor_2': '192.168.1.103',
-    '66501': '192.168.1.111',
-    '66502': '192.168.1.112',
-    '66503': '192.168.1.113',
-    '66504': '192.168.1.114',
-    '66505': '192.168.1.115',
-    '66506': '192.168.1.116',
-    '66507': '192.168.1.117',
-    '66508': '192.168.1.118',
-    '66509': '192.168.1.119',
-
-    // ====== ชั้น 6 ======
-    'F6_Lift': '192.168.1.201',
-    'F6_Hall_1': '192.168.1.202',
-    'F6_Hall_2': '192.168.1.202',
-    'F6_Corridor_1': '192.168.1.203',
-    'F6_Corridor_2': '192.168.1.203',
-    '66601': '192.168.1.211',
-    '66602': '192.168.1.212',
-    '66603': '192.168.1.213',
-    '66604': '192.168.1.214',
-    '66605': '192.168.1.215',
-    '66606': '192.168.1.216',
-    '66607': '192.168.1.217',
-    '66608': '192.168.1.218',
-    '66609': '192.168.1.219',
-
-    // ====== ชั้น 7 ======
-    'F7_Lift': '192.168.1.301',
-    'F7_Hall_1': '192.168.1.302',
-    'F7_Hall_2': '192.168.1.302',
-    'F7_Corridor_1': '192.168.1.303',
-    'F7_Corridor_2': '192.168.1.303',
-    '66701': '192.168.1.311',
-    '66702': '192.168.1.312',
-    '66703': '192.168.1.313',
-    '66704': '192.168.1.314',
-    '66705': '192.168.1.315',
-    '66706': '192.168.1.316',
-    '66707': '192.168.1.317',
-    '66708': '192.168.1.318',
-    '66709': '192.168.1.319',
-
-    // ====== ชั้น 8 ======
-    'F8_Lift': '192.168.1.401',
-    'F8_Hall_1': '192.168.1.402',
-    'F8_Hall_2': '192.168.1.402',
-    'F8_Corridor_1': '192.168.1.403',
-    'F8_Corridor_2': '192.168.1.403',
-    '66801': '192.168.1.411',
-    '66802': '192.168.1.412',
-    '66803': '192.168.1.413',
-    '66804': '192.168.1.414',
-    '66805': '192.168.1.415',
-    '66806': '192.168.1.416',
-    '66807': '192.168.1.417',
-    '66808': '192.168.1.418',
-    '66809': '192.168.1.419',
-
-    // ====== ชั้น 9 ======
-    'F9_Lift': '192.168.1.501',
-    'F9_Hall_1': '192.168.1.502',
-    'F9_Hall_2': '192.168.1.502',
-    'F9_Corridor_1': '192.168.1.503',
-    'F9_Corridor_2': '192.168.1.503',
-    '66901': '192.168.1.511',
-    '66902': '192.168.1.512',
-    '66903': '192.168.1.513',
-    '66904': '192.168.1.514',
-    '66905': '192.168.1.515',
-    '66906': '192.168.1.516',
-    '66907': '192.168.1.517',
-    '66908': '192.168.1.518',
-    '66909': '192.168.1.519',
-
-    // ====== ชั้น 10 ======
     'F10_Lift': '192.168.1.601',
-    'F10_Hall_1': '192.168.1.602',
-    'F10_Hall_2': '192.168.1.602',
-    'F10_Corridor_1': '192.168.1.603',
-    'F10_Corridor_2': '192.168.1.603',
-    '661001': '192.168.1.611',
-    '661002': '192.168.1.612',
-    '661003': '192.168.1.613',
-    '661004': '192.168.1.614',
-    '661005': '192.168.1.615',
-    '661006': '192.168.1.616',
-    '661007': '192.168.1.617',
-    '661008': '192.168.1.618',
-    '661009': '192.168.1.619',
+    'F10_Hall_1': '172.26.30.11',
+    'F10_Hall_2': '172.26.30.11',
+    'F10_Corridor_1': '172.26.30.12',
+    'F10_Corridor_2': '172.26.30.12',
   };
+
+  // 🌐 URL ของ PHP API
+  static const String phpApiBase = "http://172.26.30.10/webcontrol/web/api";
 
   // ====== ส่งคำสั่งเปิด/ปิดไฟ ======
   static Future<void> sendCommand(String roomKey, bool turnOn) async {
@@ -109,53 +22,92 @@ class ESP32Service {
       return;
     }
 
-    // ตรวจสอบว่าเป็นสวิตช์ที่ 1 หรือ 2
     final isSwitch2 = roomKey.endsWith('_2');
     final index = isSwitch2 ? '2' : '1';
     final command = turnOn ? 'on$index' : 'off$index';
-
+    final status = turnOn ? 'on' : 'off';
     final url = 'http://$ip/$command';
-    print('🌐 ส่งคำสั่งไปที่ $url');
 
     try {
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
-      if (response.statusCode == 200) {
-        print('✅ ส่ง $command สำเร็จ ($roomKey → $ip)');
-      } else {
-        print('⚠️ ESP32 ตอบกลับ status: ${response.statusCode}');
-      }
+      final resEsp = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
+      if (resEsp.statusCode == 200) print('✅ ส่งคำสั่งสำเร็จ ($roomKey)');
     } catch (e) {
-      print('🚫 เชื่อมต่อ ESP32 ไม่สำเร็จ ($roomKey): $e');
+      print('🚫 เชื่อมต่อ ESP32 ไม่สำเร็จ: $e');
+    }
+
+    try {
+      final updateUrl = "$phpApiBase/update_status.php?room=$roomKey&status=$status";
+      await http.get(Uri.parse(updateUrl)).timeout(const Duration(seconds: 3));
+      print('📡 อัปเดตสถานะในเว็บสำเร็จ ($roomKey → $status)');
+    } catch (e) {
+      print('🚫 เชื่อมต่อ PHP API ไม่สำเร็จ: $e');
     }
   }
 
-  // ====== ดึงสถานะไฟจริงจาก ESP32 ======
+  // ====== ดึงสถานะไฟจาก ESP ======
   static Future<bool> getLightStatus(String roomKey) async {
     final ip = roomIPs[roomKey];
-    if (ip == null) {
-      print('❌ ไม่พบ IP ของ $roomKey');
-      return false;
-    }
-
-    // ตรวจสอบว่าเป็นหลอดที่ 1 หรือ 2
+    if (ip == null) return false;
     final isSwitch2 = roomKey.endsWith('_2');
     final index = isSwitch2 ? '2' : '1';
     final url = 'http://$ip/status$index';
 
     try {
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final status = data['lightOn'] as bool? ?? false;
-        print('💡 $roomKey สถานะไฟ: ${status ? "เปิด" : "ปิด"}');
-        return status;
-      } else {
-        print('⚠️ ESP32 ($roomKey) ตอบกลับ status: ${response.statusCode}');
-        return false;
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['lightOn'] as bool? ?? false;
       }
     } catch (e) {
-      print('🚫 ไม่สามารถดึงสถานะไฟ $roomKey: $e');
-      return false;
+      print('🚫 ดึงสถานะไฟไม่สำเร็จ: $e');
     }
+    return false;
+  }
+
+  // ====== ดึงตารางเวลาจากเว็บ ======
+  static Future<List<Map<String, dynamic>>> getSchedules(String roomKey) async {
+    final url = "$phpApiBase/get_schedule.php?room=$roomKey";
+    try {
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return (data['schedules'] as List).cast<Map<String, dynamic>>();
+      }
+    } catch (e) {
+      print('🚫 ดึงตารางเวลาไม่สำเร็จ: $e');
+    }
+    return [];
+  }
+
+  // ====== บันทึกตารางเวลาใหม่ ======
+  static Future<bool> setSchedule({
+    required String roomKey,
+    required String mode,
+    required String startTime,
+    required String endTime,
+    bool enabled = true,
+  }) async {
+    final url = "$phpApiBase/set_schedule.php";
+    final body = jsonEncode({
+      'room': roomKey,
+      'mode': mode,
+      'start_time': startTime,
+      'end_time': endTime,
+      'enabled': enabled ? 1 : 0,
+    });
+    try {
+      final res = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['ok'] == true;
+      }
+    } catch (e) {
+      print('🚫 บันทึกตารางเวลาไม่สำเร็จ: $e');
+    }
+    return false;
   }
 }

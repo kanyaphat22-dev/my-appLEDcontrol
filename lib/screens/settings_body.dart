@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'login_screen.dart'; // 🔹 import หน้า Login ของคุณ
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_screen.dart';
 
 class SettingsBody extends StatefulWidget {
   const SettingsBody({super.key});
@@ -9,183 +12,211 @@ class SettingsBody extends StatefulWidget {
 }
 
 class _SettingsBodyState extends State<SettingsBody> {
-  String selectedLanguage = "ไทย";
-  bool isDarkMode = false; // ปุ่มเปิด/ปิดโหมดแสดงผล
-
-  // 🔹 สมมติว่าเรากำหนดค่า API IP ไว้ตรงนี้
-  final String apiIp = "http://192.168.1.100:3000";
   final String appVersion = "1.0.0";
+
+  final String baseUrl = "http://172.26.30.10/webcontrol/web";
+  final String logoutApiUrl = "http://172.26.30.10/webcontrol/web/logout.php";
+
+  String username = "";
+  String email = "-";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsernameAndFetchUserInfo();
+  }
+
+  // ✅ โหลด username จาก SharedPreferences แล้วไปดึงข้อมูลจาก API
+  Future<void> _loadUsernameAndFetchUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUsername = prefs.getString('username');
+
+    if (savedUsername != null && savedUsername.isNotEmpty) {
+      setState(() => username = savedUsername);
+      debugPrint("✅ โหลด username จาก SharedPreferences: $username");
+      _fetchUserInfo(savedUsername);
+    } else {
+      debugPrint("⚠️ ไม่พบ username ใน SharedPreferences");
+    }
+  }
+
+  // ✅ ดึงข้อมูล email จากเซิร์ฟเวอร์
+  Future<void> _fetchUserInfo(String username) async {
+    try {
+      final url = "$baseUrl/get_user_info.php?username=$username";
+      debugPrint("🌐 GET → $url");
+
+      final response = await http.get(Uri.parse(url));
+      debugPrint("📩 Response → ${response.body}");
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data["success"] == true) {
+          setState(() {
+            email = data["email"] ?? "-";
+          });
+        } else {
+          debugPrint("⚠️ ${data["message"]}");
+        }
+      } else {
+        debugPrint("⚠️ Server Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("❌ Error fetching user info: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
       children: [
-        // 🔵 Header (เหมือน NotificationBody / FavoriteBody)
-        Container(
-          width: double.infinity,
-          color: const Color(0xFF83CAF6),
-          child: SafeArea(
-            bottom: false,
-            child: Container(
-              height: 80, // 🔹 สูงเท่ากับหน้าการแจ้งเตือน
-              alignment: Alignment.bottomLeft,
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: const Text(
-                'การตั้งค่า',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  height: 1.0,
+        Column(
+          children: [
+            // 🔵 แถบหัวข้อ
+            Container(
+              width: double.infinity,
+              color: const Color(0xFF83CAF6),
+              child: SafeArea(
+                bottom: false,
+                child: Container(
+                  height: 80,
+                  alignment: Alignment.bottomLeft,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: const Text(
+                    'การตั้งค่า',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      height: 1.0,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+
+            // ⚙️ เนื้อหา
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // 👤 ข้อมูลบัญชี
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.blueAccent,
+                          child:
+                              Icon(Icons.person, color: Colors.white, size: 32),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                username.isEmpty ? "กำลังโหลด..." : username,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                email,
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.edit, color: Colors.grey),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ℹ️ เกี่ยวกับแอป
+                  _buildSettingItem(
+                    icon: Icons.info_outline,
+                    title: "เกี่ยวกับแอป",
+                    onTap: () => _showAboutDialog(context),
+                  ),
+
+                  const SizedBox(height: 160),
+                ],
+              ),
+            ),
+          ],
         ),
 
-        // ⚙️ Body
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // 👤 Section: Account
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 6,
-                      spreadRadius: 1,
-                    ),
-                  ],
+        // 🚪 ปุ่มออกจากระบบ
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: kBottomNavigationBarHeight + 30,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 6,
+                  spreadRadius: 0.5,
+                  offset: Offset(0, 2),
                 ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Colors.blueAccent,
-                      child: Icon(Icons.person, color: Colors.white, size: 32),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            "Kanyaphat",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            "user@email.com",
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        // ไปหน้าแก้ไขโปรไฟล์
-                      },
-                      icon: const Icon(Icons.edit, color: Colors.grey),
-                    ),
-                  ],
+              ],
+            ),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.redAccent,
+                elevation: 0,
+                shadowColor: Colors.transparent,
+                minimumSize: const Size.fromHeight(54),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // 🌐 Section: ภาษา
-              _buildSettingItem(
-                icon: Icons.language,
-                title: "ภาษา",
-                trailing: DropdownButton<String>(
-                  value: selectedLanguage,
-                  items: ["ไทย", "English"].map((lang) {
-                    return DropdownMenuItem(
-                      value: lang,
-                      child: Text(lang),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedLanguage = value!;
-                    });
-                  },
-                ),
-              ),
-
-              // 🌙 Section: โหมดแสดงผล
-              _buildSettingItem(
-                icon: Icons.brightness_6,
-                title: "โหมดแสดงผล",
-                trailing: SizedBox(
-                  width: 60,
-                  child: Switch(
-                    value: isDarkMode,
-                    onChanged: (val) {
-                      setState(() {
-                        isDarkMode = val;
-                        // TODO: เปลี่ยน Theme ของแอปที่นี่
-                      });
-                    },
-                    activeColor: Colors.blueAccent,
-                    inactiveThumbColor: Colors.grey,
-                    inactiveTrackColor: Colors.grey[300],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ℹ️ Section: เกี่ยวกับแอป
-              _buildSettingItem(
-                icon: Icons.info_outline,
-                title: "เกี่ยวกับแอป",
-                onTap: () {
-                  _showAboutDialog(context);
-                },
-              ),
-
-              const SizedBox(height: 20),
-
-              // 🚪 Logout
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: () {
-                  // 🔹 เคลียร์ session/token ที่เก็บไว้ก่อน (ถ้ามี)
-
-                  // 🔹 เด้งไปหน้า Login และลบ stack ทั้งหมด
+              onPressed: () async {
+                await _sendLogoutToServer();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.clear();
+                if (mounted) {
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                    (Route<dynamic> route) => false,
+                    MaterialPageRoute(
+                        builder: (context) => const LoginScreen()),
+                    (route) => false,
                   );
-                },
-                icon: const Icon(Icons.logout),
-                label: const Text(
-                  "ออกจากระบบ",
-                  style: TextStyle(fontSize: 16),
-                ),
+                }
+              },
+              icon: const Icon(Icons.logout),
+              label: const Text(
+                "ออกจากระบบ",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
-            ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  // 🔧 สร้าง Widget สำหรับแต่ละ Setting Item
   Widget _buildSettingItem({
     required IconData icon,
     required String title,
@@ -215,17 +246,11 @@ class _SettingsBodyState extends State<SettingsBody> {
               Icon(icon, color: Colors.blueAccent, size: 26),
               const SizedBox(width: 16),
               Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontSize: 16),
-                ),
+                child: Text(title, style: const TextStyle(fontSize: 16)),
               ),
               trailing ??
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 18,
-                    color: Colors.grey,
-                  ),
+                  const Icon(Icons.arrow_forward_ios,
+                      size: 18, color: Colors.grey),
             ],
           ),
         ),
@@ -233,55 +258,30 @@ class _SettingsBodyState extends State<SettingsBody> {
     );
   }
 
-  // 🔹 ฟังก์ชันแสดง Dialog เกี่ยวกับแอป
   void _showAboutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+      builder: (_) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text("เกี่ยวกับแอป"),
+        content: Text("เวอร์ชัน: $appVersion\nAPI Base: $baseUrl"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("ปิด"),
           ),
-          child: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.8,
-            height: 190,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "เกี่ยวกับแอป",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "เวอร์ชัน: $appVersion",
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "API Server: $apiIp",
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const Spacer(),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text("ปิด"),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
+
+  Future<void> _sendLogoutToServer() async {
+    try {
+      await http.get(Uri.parse(logoutApiUrl));
+      debugPrint("📤 Logout sent to server successfully.");
+    } catch (e) {
+      debugPrint("❌ Error sending logout: $e");
+    }
+  }
 }
-  

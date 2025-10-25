@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,14 +17,11 @@ class _LoginScreenState extends State<LoginScreen> {
   String username = '';
   String password = '';
   bool _obscure = true;
-
   final Color logoBlue = const Color(0xFF2D9CC8);
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-
-    // ✅ สีล่างสุดของ gradient (ใช้กำหนดให้แถบ system bar เป็นสีเดียวกัน)
     const Color bottomColor = Color(0xFF2D9CC8);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -31,8 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
         systemNavigationBarDividerColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
         statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor:
-            bottomColor, // ✅ ตั้งให้ตรงกับสีล่างสุดของ gradient
+        systemNavigationBarColor: bottomColor,
       ),
       child: Scaffold(
         extendBody: true,
@@ -40,15 +38,15 @@ class _LoginScreenState extends State<LoginScreen> {
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           top: false,
-          bottom: false, // ✅ ปิด safe area ด้านล่างให้ gradient ครอบเต็ม
+          bottom: false,
           child: Container(
             width: size.width,
             height: size.height,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color(0xFFd5f3ff), // ฟ้าอ่อนบน
-                  bottomColor,        // ฟ้าเข้มล่าง
+                  Color(0xFFd5f3ff),
+                  bottomColor,
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -65,12 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.asset(
-                        'assets/logo.png',
-                        width: size.width * 0.6,
-                      ),
+                      Image.asset('assets/logo.png', width: size.width * 0.6),
                       const SizedBox(height: 30),
-
                       ClipRRect(
                         borderRadius: BorderRadius.circular(20),
                         child: BackdropFilter(
@@ -97,25 +91,22 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 24),
-
-                                    // 🧍 Username
                                     TextFormField(
                                       keyboardType: TextInputType.text,
                                       onSaved: (v) => username = v!.trim(),
+                                      validator: (v) => v == null || v.isEmpty
+                                          ? 'กรุณากรอกชื่อผู้ใช้'
+                                          : null,
                                       inputFormatters: [
                                         FilteringTextInputFormatter.allow(
-                                          RegExp(r'[a-zA-Z0-9_.\-]'),
-                                        ),
+                                            RegExp(r'[a-zA-Z0-9_.\-]')),
                                       ],
                                       decoration: InputDecoration(
                                         labelText: 'ชื่อผู้ใช้',
                                         labelStyle:
                                             TextStyle(color: logoBlue),
-                                        prefixIcon: Icon(
-                                          Icons.person,
-                                          color: logoBlue,
-                                          size: 28,
-                                        ),
+                                        prefixIcon: Icon(Icons.person,
+                                            color: logoBlue, size: 28),
                                         border: OutlineInputBorder(
                                           borderRadius:
                                               BorderRadius.circular(12),
@@ -123,25 +114,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 16),
-
-                                    // 🔒 Password
                                     TextFormField(
                                       obscureText: _obscure,
                                       onSaved: (v) => password = v ?? '',
-                                      inputFormatters: [
-                                        FilteringTextInputFormatter.allow(
-                                          RegExp(r'[a-zA-Z0-9@._\-]'),
-                                        ),
-                                      ],
+                                      validator: (v) => v == null || v.isEmpty
+                                          ? 'กรุณากรอกรหัสผ่าน'
+                                          : null,
                                       decoration: InputDecoration(
                                         labelText: 'รหัสผ่าน',
                                         labelStyle:
                                             TextStyle(color: logoBlue),
-                                        prefixIcon: Icon(
-                                          Icons.lock,
-                                          color: logoBlue,
-                                          size: 28,
-                                        ),
+                                        prefixIcon: Icon(Icons.lock,
+                                            color: logoBlue, size: 28),
                                         suffixIcon: IconButton(
                                           icon: Icon(
                                             _obscure
@@ -150,8 +134,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                             color: logoBlue,
                                           ),
                                           onPressed: () {
-                                            setState(() =>
-                                                _obscure = !_obscure);
+                                            setState(
+                                                () => _obscure = !_obscure);
                                           },
                                         ),
                                         border: OutlineInputBorder(
@@ -160,18 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                       ),
                                     ),
-
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: TextButton(
-                                        onPressed: () {},
-                                        child: const Text('ลืมรหัสผ่าน?'),
-                                      ),
-                                    ),
-
                                     const SizedBox(height: 20),
-
-                                    // 🔘 Login button
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton(
@@ -182,18 +155,70 @@ class _LoginScreenState extends State<LoginScreen> {
                                             borderRadius:
                                                 BorderRadius.circular(16),
                                             side: BorderSide(
-                                              color: logoBlue,
-                                              width: 2,
-                                            ),
+                                                color: logoBlue, width: 2),
                                           ),
                                           backgroundColor: logoBlue,
-                                          shadowColor:
-                                              Colors.black.withOpacity(0.2),
+                                          shadowColor: Colors.black
+                                              .withOpacity(0.2),
                                           elevation: 6,
                                         ),
-                                        onPressed: () {
-                                          Navigator.pushReplacementNamed(
-                                              context, '/floor');
+                                        onPressed: () async {
+                                          if (_formKey.currentState!
+                                              .validate()) {
+                                            _formKey.currentState!.save();
+                                            showDialog(
+                                              context: context,
+                                              barrierDismissible: false,
+                                              builder: (_) => const Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                            );
+
+                                            final result =
+                                                await AuthService.login(
+                                              username: username,
+                                              password: password,
+                                            );
+                                            Navigator.pop(context);
+
+                                            if (result['success'] == true) {
+                                              final prefs =
+                                                  await SharedPreferences
+                                                      .getInstance();
+                                              final user = result['user'];
+
+                                              await prefs.setString(
+                                                  'user_id',
+                                                  user['id'].toString());
+                                              await prefs.setString('username',
+                                                  user['username']);
+                                              await prefs.setString('fullname',
+                                                  user['fullname']);
+                                              await prefs.setString(
+                                                  'role', user['role']);
+
+                                              // ✅ บันทึกสถานะล็อกอินไว้
+                                              await prefs.setBool(
+                                                  'isLoggedIn', true);
+                                              await prefs.setBool(
+                                                  'justLoggedIn', true);
+
+                                              // ✅ ไปหน้า floor (MainScreen)
+                                              if (context.mounted) {
+                                                Navigator
+                                                    .pushReplacementNamed(
+                                                        context, '/floor');
+                                              }
+                                            } else {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(SnackBar(
+                                                content: Text(result[
+                                                        'message'] ??
+                                                    'เข้าสู่ระบบล้มเหลว'),
+                                              ));
+                                            }
+                                          }
                                         },
                                         child: const Text(
                                           'Login',
@@ -212,18 +237,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                       ),
                                     ),
-
                                     const SizedBox(height: 12),
-
-                                    // 🧾 Register
                                     Center(
                                       child: RichText(
                                         text: TextSpan(
                                           text: "Don't have an account  ",
                                           style: TextStyle(
-                                            color: logoBlue,
-                                            fontSize: 16,
-                                          ),
+                                              color: logoBlue, fontSize: 16),
                                           children: [
                                             TextSpan(
                                               text: "Register",

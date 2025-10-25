@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_screen.dart';
+import 'main_screen.dart'; // 👈 หน้าที่คุณต้องการให้เข้าเมื่อเคยล็อกอินแล้ว
 
 class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
@@ -15,7 +20,8 @@ class _SplashScreenState extends State<SplashScreen> {
     _startLoading();
   }
 
-  void _startLoading() async {
+  Future<void> _startLoading() async {
+    // ✅ โหลด progress animation
     while (mounted && progress < 100) {
       await Future.delayed(const Duration(milliseconds: 15));
       if (!mounted) return;
@@ -23,8 +29,25 @@ class _SplashScreenState extends State<SplashScreen> {
         progress += 2;
       });
     }
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
+
+    // ✅ ตรวจสอบสถานะล็อกอิน
+    final prefs = await SharedPreferences.getInstance();
+    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+
+    if (!mounted) return;
+
+    if (isLoggedIn) {
+      // 🔹 เคยล็อกอิน → ไปหน้า MainScreen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
+    } else {
+      // 🔸 ยังไม่เคยล็อกอิน → ไปหน้า Login
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
     }
   }
 
@@ -32,31 +55,30 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    // ✅ สีล่างสุดของ gradient ใช้เป็นสี systemNavigationBar ด้วย
     const Color bottomColor = Color(0xFF2D9CC8);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent, // โปร่งใสด้านบน
-        systemNavigationBarColor: bottomColor, // สีล่างสุดของ gradient
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: bottomColor,
         systemNavigationBarDividerColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
         statusBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        extendBody: true, // ✅ ให้เนื้อหาลงถึงขอบล่างจริง
+        extendBody: true,
         backgroundColor: Colors.transparent,
         body: SafeArea(
           top: false,
-          bottom: false, // ✅ ปิด SafeArea ล่าง เพื่อให้ gradient ลงถึงขอบ
+          bottom: false,
           child: Container(
             width: size.width,
             height: size.height,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color(0xFFd5f3ff), // ฟ้าอ่อนบน
-                  bottomColor,        // ฟ้าเข้มล่าง
+                  Color(0xFFd5f3ff),
+                  bottomColor,
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -66,12 +88,14 @@ class _SplashScreenState extends State<SplashScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // โลโก้แอป
                   Image.asset(
                     'assets/logo.png',
                     width: size.width * 0.8,
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 20),
+                  // วงกลมโหลด
                   Stack(
                     alignment: Alignment.center,
                     children: [
@@ -82,7 +106,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           value: progress / 100,
                           strokeWidth: 8,
                           valueColor: const AlwaysStoppedAnimation<Color>(
-                            Color(0xFF39A8D3), // สีเดียวกับโลโก้
+                            Color(0xFF39A8D3),
                           ),
                           backgroundColor: Colors.white.withOpacity(0.2),
                         ),
@@ -97,7 +121,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 60), // ✅ กันขีด gesture ทับ
+                  const SizedBox(height: 60),
                 ],
               ),
             ),

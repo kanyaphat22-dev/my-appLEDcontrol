@@ -49,8 +49,8 @@ class RoomScreen extends StatelessWidget {
 
         // ห้องพิเศษบนสุด
         rooms.addAll([
-          {'label': 'ห้องโถง', 'value': 'F${floorNumber}_Hall'},
-          {'label': 'ทางเดิน', 'value': 'F${floorNumber}_Corridor'},
+          {'label': 'โถงหน้าลิฟท์', 'value': 'F${floorNumber}_Hall'},
+          {'label': 'โถงทางเดิน', 'value': 'F${floorNumber}_Corridor'},
         ]);
 
         // ✅ กำหนดจำนวนห้องปกติตามชั้น

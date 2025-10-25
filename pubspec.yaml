@@ -10,10 +10,16 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # 🧩 UI และฟอนต์
   cupertino_icons: ^1.0.8
   google_fonts: ^6.3.0
+
+  # 🧩 จัดการค่า local storage (session/token)
   shared_preferences: ^2.5.3
 
+  # 🧩 สำหรับเรียก API เช่น logout.php
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
@@ -22,6 +28,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
   assets:
     - assets/logo.png
     - assets/email.png
@@ -35,3 +42,5 @@ flutter:
     - assets/floor8.png
     - assets/floor9.png
     - assets/floor10.png
+    - assets/engineer.png
+

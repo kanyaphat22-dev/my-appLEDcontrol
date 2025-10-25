@@ -24,9 +24,6 @@ class _ControlScreenState extends State<ControlScreen> {
   Timer? offTimer;
   Timer? statusTimer;
 
-  Timer? checkTimer1;
-  Timer? checkTimer2;
-
   String floor = "";
   String room = "";
   String roomKey = "";
@@ -35,6 +32,8 @@ class _ControlScreenState extends State<ControlScreen> {
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _dropdownOverlay;
   final GlobalKey _buttonKey = GlobalKey();
+
+  List<Map<String, dynamic>> _webSchedules = [];
 
   @override
   void didChangeDependencies() {
@@ -56,6 +55,7 @@ class _ControlScreenState extends State<ControlScreen> {
       if (!mounted) return;
       await _fetchLightStatusFromESP32();
     });
+    _loadWebSchedules();
   }
 
   @override
@@ -63,61 +63,32 @@ class _ControlScreenState extends State<ControlScreen> {
     onTimer?.cancel();
     offTimer?.cancel();
     statusTimer?.cancel();
-    checkTimer1?.cancel();
-    checkTimer2?.cancel();
     _dropdownOverlay?.remove();
-    _dropdownOverlay = null;
     super.dispose();
   }
 
-  // ✅ ป้องกัน setState หลัง dispose
-  @override
-  void setState(VoidCallback fn) {
-    if (!mounted) {
-      debugPrint("⚠️ setState ถูกเรียกหลัง dispose ที่ ${DateTime.now()}");
-      return;
-    }
-    super.setState(fn);
-  }
-
+  // ===== โหลดสถานะไฟ =====
   Future<void> _fetchLightStatusFromESP32() async {
-    if (!mounted) return;
-
     try {
       if (dualMode) {
-        bool skip1 = checkTimer1 != null && checkTimer1!.isActive;
-        bool skip2 = checkTimer2 != null && checkTimer2!.isActive;
-
-        bool? status1;
-        bool? status2;
-
-        if (!skip1) status1 = await ESP32Service.getLightStatus("${roomKey}_1");
-        if (!skip2) status2 = await ESP32Service.getLightStatus("${roomKey}_2");
-
-        if (!mounted) return;
+        bool? s1 = await ESP32Service.getLightStatus("${roomKey}_1");
+        bool? s2 = await ESP32Service.getLightStatus("${roomKey}_2");
         setState(() {
-          if (status1 != null) lightOn1 = status1;
-          if (status2 != null) lightOn2 = status2;
+          if (s1 != null) lightOn1 = s1;
+          if (s2 != null) lightOn2 = s2;
         });
       } else {
-        bool skip = checkTimer1 != null && checkTimer1!.isActive;
-        if (!skip) {
-          bool status = await ESP32Service.getLightStatus(roomKey);
-          if (!mounted) return;
-          setState(() => lightOn1 = status);
-        }
+        bool s = await ESP32Service.getLightStatus(roomKey);
+        setState(() => lightOn1 = s);
       }
-    } catch (e) {
-      if (!mounted) return;
-      print('ไม่สามารถดึงสถานะไฟจาก ESP32: $e');
-    }
+    } catch (_) {}
   }
 
+  // ===== โหลดเวลาที่เคยบันทึก =====
   Future<void> _loadSavedTimesAndStatus() async {
     final prefs = await SharedPreferences.getInstance();
 
     selectedSwitch = prefs.getString('${roomKey}_selectedSwitch') ?? "SW1";
-
     final onHour = prefs.getInt('${roomKey}_onHour');
     final onMinute = prefs.getInt('${roomKey}_onMinute');
     final offHour = prefs.getInt('${roomKey}_offHour');
@@ -130,30 +101,62 @@ class _ControlScreenState extends State<ControlScreen> {
       scheduledOffTime = TimeOfDay(hour: offHour, minute: offMinute);
     }
 
+    // 🔹 ล้างเวลาเก่าที่หมดอายุ
+    final now = DateTime.now();
+    if (scheduledOffTime != null) {
+      final off = DateTime(now.year, now.month, now.day, scheduledOffTime!.hour, scheduledOffTime!.minute);
+      if (off.isBefore(now)) {
+        await _clearSavedTimes();
+      }
+    }
+
     _scheduleTimers();
   }
 
+  // ===== ล้างเวลาใน SharedPreferences =====
+  Future<void> _clearSavedTimes() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('${roomKey}_onHour');
+    await prefs.remove('${roomKey}_onMinute');
+    await prefs.remove('${roomKey}_offHour');
+    await prefs.remove('${roomKey}_offMinute');
+    setState(() {
+      scheduledOnTime = null;
+      scheduledOffTime = null;
+    });
+  }
+
+  // ===== โหลดตารางเวลาจากเว็บ =====
+  Future<void> _loadWebSchedules() async {
+    final list = await ESP32Service.getSchedules(roomKey);
+    setState(() => _webSchedules = list);
+  }
+
+  // ===== บันทึกเวลา =====
   Future<void> _saveTimes() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString('${roomKey}_selectedSwitch', selectedSwitch);
 
-    if (scheduledOnTime != null) {
+    if (scheduledOnTime != null && scheduledOffTime != null) {
       prefs.setInt('${roomKey}_onHour', scheduledOnTime!.hour);
       prefs.setInt('${roomKey}_onMinute', scheduledOnTime!.minute);
-    } else {
-      prefs.remove('${roomKey}_onHour');
-      prefs.remove('${roomKey}_onMinute');
-    }
-
-    if (scheduledOffTime != null) {
       prefs.setInt('${roomKey}_offHour', scheduledOffTime!.hour);
       prefs.setInt('${roomKey}_offMinute', scheduledOffTime!.minute);
-    } else {
-      prefs.remove('${roomKey}_offHour');
-      prefs.remove('${roomKey}_offMinute');
+
+      final start = "${scheduledOnTime!.hour.toString().padLeft(2, '0')}:${scheduledOnTime!.minute.toString().padLeft(2, '0')}:00";
+      final end = "${scheduledOffTime!.hour.toString().padLeft(2, '0')}:${scheduledOffTime!.minute.toString().padLeft(2, '0')}:00";
+
+      await ESP32Service.setSchedule(
+        roomKey: roomKey,
+        mode: "auto",
+        startTime: start,
+        endTime: end,
+      );
+      await _loadWebSchedules();
     }
   }
 
+  // ===== ตั้งเวลาในแอป =====
   void _scheduleTimers() {
     onTimer?.cancel();
     offTimer?.cancel();
@@ -161,156 +164,291 @@ class _ControlScreenState extends State<ControlScreen> {
     final now = DateTime.now();
 
     if (scheduledOnTime != null) {
-      final onDateTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        scheduledOnTime!.hour,
-        scheduledOnTime!.minute,
-      );
+      final onDateTime = DateTime(now.year, now.month, now.day, scheduledOnTime!.hour, scheduledOnTime!.minute);
       final onDelay = onDateTime.isBefore(now)
           ? onDateTime.add(const Duration(days: 1)).difference(now)
           : onDateTime.difference(now);
-
-      onTimer = Timer(onDelay, () async {
-        if (!mounted) return;
-        await _sendCommand(true,
-            fixedIndex: selectedSwitch == "SW1" ? 1 : 2);
-        await _saveTimes();
-      });
+      onTimer = Timer(onDelay, () => _sendCommand(true, fixedIndex: selectedSwitch == "SW1" ? 1 : 2));
     }
 
     if (scheduledOffTime != null) {
-      final offDateTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        scheduledOffTime!.hour,
-        scheduledOffTime!.minute,
-      );
+      final offDateTime = DateTime(now.year, now.month, now.day, scheduledOffTime!.hour, scheduledOffTime!.minute);
       final offDelay = offDateTime.isBefore(now)
           ? offDateTime.add(const Duration(days: 1)).difference(now)
           : offDateTime.difference(now);
-
-      offTimer = Timer(offDelay, () async {
-        if (!mounted) return;
-        await _sendCommand(false,
-            fixedIndex: selectedSwitch == "SW1" ? 1 : 2);
-
-        final prefs = await SharedPreferences.getInstance();
-        prefs.remove('${roomKey}_onHour');
-        prefs.remove('${roomKey}_onMinute');
-        prefs.remove('${roomKey}_offHour');
-        prefs.remove('${roomKey}_offMinute');
-
-        if (!mounted) return;
-        setState(() {
-          scheduledOnTime = null;
-          scheduledOffTime = null;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content:
-                  Text('⏰ ถึงเวลาปิดไฟแล้ว ระบบล้างเวลาที่ตั้งไว้เรียบร้อย'),
-            ),
-          );
-        }
-      });
+      offTimer = Timer(offDelay, () => _sendCommand(false, fixedIndex: selectedSwitch == "SW1" ? 1 : 2));
     }
   }
 
   Future<void> _sendCommand(bool turnOn, {int? fixedIndex}) async {
-    if (!mounted) return;
     if (dualMode) {
       int index = fixedIndex ?? (selectedSwitch == "SW1" ? 1 : 2);
-      String target = "${roomKey}_$index";
-      await ESP32Service.sendCommand(target, turnOn);
-      if (!mounted) return;
+      await ESP32Service.sendCommand("${roomKey}_$index", turnOn);
       setState(() {
-        if (index == 1) {
-          lightOn1 = turnOn;
-        } else {
-          lightOn2 = turnOn;
-        }
+        if (index == 1) lightOn1 = turnOn; else lightOn2 = turnOn;
       });
     } else {
       await ESP32Service.sendCommand(roomKey, turnOn);
-      if (!mounted) return;
       setState(() => lightOn1 = turnOn);
     }
   }
 
-  Future<void> _toggleLight(int index) async {
-    if (!mounted) return;
-    if (dualMode) {
-      if (index == 1) {
-        lightOn1 = !lightOn1;
-        await ESP32Service.sendCommand("${roomKey}_1", lightOn1);
-        if (!mounted) return;
-        setState(() {});
+  Future<void> pickTime(BuildContext context, bool isOnTime) async {
+    final now = DateTime.now();
+    await showModalBottomSheet(
+      context: context,
+      builder: (_) => SizedBox(
+        height: 250,
+        child: CupertinoDatePicker(
+          mode: CupertinoDatePickerMode.time,
+          initialDateTime: now,
+          use24hFormat: true,
+          onDateTimeChanged: (DateTime dt) {
+            setState(() {
+              if (isOnTime) {
+                scheduledOnTime = TimeOfDay(hour: dt.hour, minute: dt.minute);
+              } else {
+                scheduledOffTime = TimeOfDay(hour: dt.hour, minute: dt.minute);
+              }
+            });
+          },
+        ),
+      ),
+    );
+  }
 
-        if (lightOn1) {
-          checkTimer1?.cancel();
-          checkTimer1 = Timer(const Duration(seconds: 5), () async {
-            if (!mounted) return;
-            bool actualStatus =
-                await ESP32Service.getLightStatus("${roomKey}_1");
-            if (!mounted) return;
-            if (!actualStatus) {
-              setState(() => lightOn1 = false);
-              print("⚠️ หลอด 1 ไม่ติดจริง ดับในแอป");
-            }
-          });
-        } else {
-          checkTimer1?.cancel();
+  String formatTime(TimeOfDay? t) {
+    if (t == null) return '-';
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} น.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 131, 202, 246),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () {
+            statusTimer?.cancel();
+            Navigator.pop(context);
+          },
+        ),
+        title: Text('ควบคุมไฟ - $floor $room', style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w500)),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            _buildLightPanel(),
+            const SizedBox(height: 30),
+            _buildScheduleSetupBox(),
+            const SizedBox(height: 25),
+            _buildWebScheduleBox(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ====== ส่วน UI ======
+  Widget _buildLightPanel() {
+    return Container(
+      width: double.infinity,
+      height: 280,
+      padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
+      ),
+      child: dualMode
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildLightColumn(1, lightOn1),
+                _buildLightColumn(2, lightOn2),
+              ],
+            )
+          : Center(child: _buildLightColumn(1, lightOn1)),
+    );
+  }
+
+  Widget _buildLightColumn(int index, bool lightOn) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(lightOn ? Icons.lightbulb : Icons.lightbulb_outline,
+            color: lightOn ? Colors.yellow[600] : Colors.grey[400], size: 110),
+        const SizedBox(height: 20),
+        OutlinedButton(
+          onPressed: () => _sendCommand(index == 1 ? !lightOn1 : !lightOn2, fixedIndex: index),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: lightOn ? Colors.lightBlue : Colors.grey, width: 2),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: Text(
+            lightOn ? 'ปิดไฟ $index' : 'เปิดไฟ $index',
+            style: GoogleFonts.prompt(fontSize: 16, color: lightOn ? Colors.lightBlue : Colors.grey),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScheduleSetupBox() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(child: Text('ตั้งเวลาควบคุมไฟ', style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w600))),
+          const SizedBox(height: 16),
+          Text('กรุณาเลือกสวิทช์', style: GoogleFonts.prompt(fontSize: 16, color: Colors.grey[700])),
+          const SizedBox(height: 8),
+          _buildSwitchSelector(),
+          const SizedBox(height: 20),
+          ListTile(
+            title: Text('เวลาเปิดไฟ: ${formatTime(scheduledOnTime)}'),
+            trailing: const Icon(Icons.access_time),
+            onTap: () => pickTime(context, true),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            title: Text('เวลาปิดไฟ: ${formatTime(scheduledOffTime)}'),
+            trailing: const Icon(Icons.access_time),
+            onTap: () => pickTime(context, false),
+          ),
+          const SizedBox(height: 16),
+          _buildSaveButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebScheduleBox() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("📅 ตารางเวลาเปิด-ปิด", style: GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          if (_webSchedules.isEmpty)
+            Center(child: Text("ยังไม่มีตารางเวลา", style: GoogleFonts.prompt(fontSize: 16, color: Colors.grey))),
+          ..._webSchedules.map((s) => Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("${s['start_time']} - ${s['end_time']} (${s['mode']})", style: GoogleFonts.prompt(fontSize: 15)),
+                    Icon(s['enabled'] == 1 ? Icons.check_circle : Icons.cancel,
+                        color: s['enabled'] == 1 ? Colors.green : Colors.red),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  // ===== ปุ่มบันทึกเวลา =====
+  Widget _buildSaveButton() {
+    return ElevatedButton(
+      onPressed: () async {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(days: 1),
+            backgroundColor: Colors.lightBlue,
+            content: Row(
+              children: [
+                const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white)),
+                const SizedBox(width: 16),
+                Text('กำลังบันทึกเวลา...', style: GoogleFonts.prompt(color: Colors.white)),
+              ],
+            ),
+          ),
+        );
+
+        try {
+          await _saveTimes().timeout(const Duration(seconds: 8));
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ บันทึกเวลาสำเร็จ', style: GoogleFonts.prompt(color: Colors.white)),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          _scheduleTimers();
+        } on TimeoutException {
+          await _clearSavedTimes();
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ บันทึกไม่สำเร็จ: เซิร์ฟเวอร์ไม่ตอบสนอง', style: GoogleFonts.prompt(color: Colors.white)),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } catch (e) {
+          await _clearSavedTimes();
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ บันทึกไม่สำเร็จ: $e', style: GoogleFonts.prompt(color: Colors.white)),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
         }
-      } else {
-        lightOn2 = !lightOn2;
-        await ESP32Service.sendCommand("${roomKey}_2", lightOn2);
-        if (!mounted) return;
-        setState(() {});
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.lightBlue,
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Text('บันทึกเวลา', style: GoogleFonts.prompt(fontSize: 16, color: Colors.white)),
+    );
+  }
 
-        if (lightOn2) {
-          checkTimer2?.cancel();
-          checkTimer2 = Timer(const Duration(seconds: 5), () async {
-            if (!mounted) return;
-            bool actualStatus =
-                await ESP32Service.getLightStatus("${roomKey}_2");
-            if (!mounted) return;
-            if (!actualStatus) {
-              setState(() => lightOn2 = false);
-              print("⚠️ หลอด 2 ไม่ติดจริง ดับในแอป");
-            }
-          });
-        } else {
-          checkTimer2?.cancel();
-        }
-      }
-    } else {
-      lightOn1 = !lightOn1;
-      await ESP32Service.sendCommand(roomKey, lightOn1);
-      if (!mounted) return;
-      setState(() {});
-
-      if (lightOn1) {
-        checkTimer1?.cancel();
-        checkTimer1 = Timer(const Duration(seconds: 5), () async {
-          if (!mounted) return;
-          bool actualStatus = await ESP32Service.getLightStatus(roomKey);
-          if (!mounted) return;
-          if (!actualStatus) {
-            setState(() => lightOn1 = false);
-            print("⚠️ หลอดไม่ติดจริง ดับในแอป");
-          }
-        });
-      } else {
-        checkTimer1?.cancel();
-      }
-    }
-
-    await _saveTimes();
+  Widget _buildSwitchSelector() {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: GestureDetector(
+        key: _buttonKey,
+        onTap: _toggleDropdown,
+        child: Container(
+          width: 150,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.lightBlue.shade300, width: 1.5),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          alignment: Alignment.center,
+          child: Text(selectedSwitch, style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w500)),
+        ),
+      ),
+    );
   }
 
   void _toggleDropdown() {
@@ -324,293 +462,38 @@ class _ControlScreenState extends State<ControlScreen> {
   void _removeDropdown() {
     _dropdownOverlay?.remove();
     _dropdownOverlay = null;
-    if (mounted) setState(() => _isDropdownVisible = false);
+    setState(() => _isDropdownVisible = false);
   }
 
   void _showAnimatedDropdown() {
-    if (!mounted) return;
     final overlay = Overlay.of(context);
-    final renderBox =
-        _buttonKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox = _buttonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
-
     final position = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
 
     _dropdownOverlay = OverlayEntry(
-      builder: (context) {
-        return Positioned(
-          left: position.dx,
-          top: position.dy + size.height + 6,
-          width: size.width,
-          child: _AnimatedDropdownMenu(
-            selected: selectedSwitch,
-            dualMode: dualMode,
-            onSelect: (value) async {
-              if (!mounted) return;
-              setState(() => selectedSwitch = value);
-              await _saveTimes();
-              _removeDropdown();
-            },
-          ),
-        );
-      },
-    );
-
-    if (mounted) {
-      overlay.insert(_dropdownOverlay!);
-      setState(() => _isDropdownVisible = true);
-    }
-  }
-
-  Future<void> pickTime(BuildContext context, bool isOnTime) async {
-    if (!mounted) return;
-    TimeOfDay initialTime = TimeOfDay.now();
-    DateTime now = DateTime.now();
-    DateTime initialDateTime = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      initialTime.hour,
-      initialTime.minute,
-    );
-
-    await showModalBottomSheet(
-      context: context,
-      builder: (_) => SizedBox(
-        height: 250,
-        child: CupertinoDatePicker(
-          mode: CupertinoDatePickerMode.time,
-          initialDateTime: initialDateTime,
-          use24hFormat: true,
-          onDateTimeChanged: (DateTime dt) {
-            if (!mounted) return;
-            setState(() {
-              if (isOnTime) {
-                scheduledOnTime =
-                    TimeOfDay(hour: dt.hour, minute: dt.minute);
-              } else {
-                scheduledOffTime =
-                    TimeOfDay(hour: dt.hour, minute: dt.minute);
-              }
-            });
+      builder: (context) => Positioned(
+        left: position.dx,
+        top: position.dy + size.height + 6,
+        width: size.width,
+        child: _AnimatedDropdownMenu(
+          selected: selectedSwitch,
+          dualMode: dualMode,
+          onSelect: (value) async {
+            setState(() => selectedSwitch = value);
+            await _saveTimes();
+            _removeDropdown();
           },
         ),
       ),
     );
-    await _saveTimes();
-  }
-
-  String formatTime(TimeOfDay? t) {
-    if (t == null) return '-';
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    return '$h:$m น.';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: const Color.fromARGB(255, 131, 202, 246),
-        elevation: 2,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () {
-            statusTimer?.cancel();
-            checkTimer1?.cancel();
-            checkTimer2?.cancel();
-            Navigator.pop(context);
-          },
-        ),
-        title: Text(
-          'ควบคุมไฟ - $floor $room',
-          style: GoogleFonts.prompt(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              height: 280,
-              padding:
-                  const EdgeInsets.symmetric(vertical: 25, horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 15,
-                    offset: Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: dualMode
-                  ? Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildLightColumn(1, lightOn1),
-                        _buildLightColumn(2, lightOn2),
-                      ],
-                    )
-                  : Center(child: _buildLightColumn(1, lightOn1)),
-            ),
-            const SizedBox(height: 30),
-
-            // 🔹 ตั้งเวลา
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 15,
-                      offset: Offset(0, 5)),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Text('ตั้งเวลาควบคุมไฟ',
-                        style: GoogleFonts.prompt(
-                            fontSize: 20, fontWeight: FontWeight.w600)),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('กรุณาเลือกสวิทซ์',
-                      style: GoogleFonts.prompt(
-                          fontSize: 16, color: Colors.grey[700])),
-                  const SizedBox(height: 8),
-                  CompositedTransformTarget(
-                    link: _layerLink,
-                    child: GestureDetector(
-                      key: _buttonKey,
-                      onTap: _toggleDropdown,
-                      child: Container(
-                        width: 150,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: Colors.lightBlue.shade300, width: 1.5),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 8,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        alignment: Alignment.center,
-                        child: Text(
-                          selectedSwitch,
-                          style: GoogleFonts.prompt(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ListTile(
-                    tileColor: Colors.grey[50],
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    title: Text('เวลาเปิดไฟ: ${formatTime(scheduledOnTime)}'),
-                    trailing: const Icon(Icons.access_time),
-                    onTap: () => pickTime(context, true),
-                  ),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    tileColor: Colors.grey[50],
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    title: Text('เวลาปิดไฟ: ${formatTime(scheduledOffTime)}'),
-                    trailing: const Icon(Icons.access_time),
-                    onTap: () => pickTime(context, false),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await _saveTimes();
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('บันทึกตั้งเวลาเรียบร้อย')),
-                      );
-                      _scheduleTimers();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlue,
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 14, horizontal: 32),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text('บันทึกเวลา',
-                        style: GoogleFonts.prompt(
-                            fontSize: 16, color: Colors.white)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLightColumn(int index, bool lightOn) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          lightOn ? Icons.lightbulb : Icons.lightbulb_outline,
-          color: lightOn ? Colors.yellow[600] : Colors.grey[400],
-          size: 110,
-        ),
-        const SizedBox(height: 20),
-        OutlinedButton(
-          onPressed: () => _toggleLight(index),
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(
-              color: lightOn ? Colors.lightBlue : Colors.grey,
-              width: 2,
-            ),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-            padding:
-                const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
-          ),
-          child: Text(
-            lightOn
-                ? (dualMode ? 'ปิดไฟ $index' : 'ปิดไฟ')
-                : (dualMode ? 'เปิดไฟ $index' : 'เปิดไฟ'),
-            style: GoogleFonts.prompt(
-              fontSize: 16,
-              color: lightOn ? Colors.lightBlue : Colors.grey,
-            ),
-          ),
-        ),
-      ],
-    );
+    overlay.insert(_dropdownOverlay!);
+    setState(() => _isDropdownVisible = true);
   }
 }
 
-// 🔹 Dropdown menu animation widget
+// ===== Dropdown Menu =====
 class _AnimatedDropdownMenu extends StatefulWidget {
   final String selected;
   final bool dualMode;
@@ -635,15 +518,9 @@ class _AnimatedDropdownMenuState extends State<_AnimatedDropdownMenu>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
-    _fade =
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
-    _slide = Tween(begin: const Offset(0, -0.1), end: Offset.zero)
-        .animate(CurvedAnimation(
-            parent: _controller, curve: Curves.easeOutCubic));
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _slide = Tween(begin: const Offset(0, -0.1), end: Offset.zero).animate(_fade);
     _controller.forward();
   }
 
@@ -666,31 +543,23 @@ class _AnimatedDropdownMenuState extends State<_AnimatedDropdownMenu>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 8,
-                  offset: Offset(0, 4),
-                ),
-              ],
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: options.map((e) {
-                final isSelected = widget.selected == e;
+                final selected = widget.selected == e;
                 return InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: () => widget.onSelect(e),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 10, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                     width: double.infinity,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(e, style: GoogleFonts.prompt(fontSize: 16)),
-                        if (isSelected)
-                          const Icon(Icons.check, color: Colors.lightBlue),
+                        if (selected) const Icon(Icons.check, color: Colors.lightBlue),
                       ],
                     ),
                   ),

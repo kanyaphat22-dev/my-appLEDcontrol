@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -15,32 +16,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
   String email = '';
   String username = '';
   String password = '';
-
   bool _obscure = true;
-  final Color themeBlue = const Color(0xFF1A9ACF); // ฟ้าเข้ม
+  final Color themeBlue = const Color(0xFF1A9ACF);
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-
-    // ✅ สีล่างสุดของ gradient (ใช้กับแถบระบบล่าง)
     const Color bottomColor = Color(0xFF1A9ACF);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: bottomColor, // ✅ สีเดียวกับฟ้าล่าง
+        systemNavigationBarColor: bottomColor,
         systemNavigationBarDividerColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
         statusBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        extendBody: true, // ✅ ให้ body ขยายถึงขอบจอ
+        extendBody: true,
         backgroundColor: Colors.transparent,
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           top: false,
-          bottom: false, // ✅ ปิด SafeArea ล่าง
+          bottom: false,
           child: Container(
             width: size.width,
             height: size.height,
@@ -48,10 +46,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFE0F0FA), // ฟ้าอ่อนบน
-                  bottomColor,        // ฟ้าเข้มล่าง
-                ],
+                colors: [Color(0xFFE0F0FA), bottomColor],
               ),
             ),
             child: Center(
@@ -66,9 +61,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
-                        ),
+                        border: Border.all(color: Colors.white.withOpacity(0.3)),
                       ),
                       padding: const EdgeInsets.all(20),
                       child: Form(
@@ -76,22 +69,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Image.asset(
-                              'assets/logo.png',
-                              height: 80,
-                            ),
+                            Image.asset('assets/logo.png', height: 80),
                             const SizedBox(height: 16),
                             Text(
                               'Register',
                               style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: themeBlue,
-                              ),
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: themeBlue),
                             ),
                             const SizedBox(height: 24),
-
-                            // 1️⃣ Email
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: 'อีเมล',
@@ -100,23 +87,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              style: TextStyle(color: themeBlue),
-                              keyboardType: TextInputType.emailAddress,
                               validator: (v) {
                                 if (v == null || v.isEmpty) {
                                   return 'กรุณากรอกอีเมล';
                                 }
-                                if (!RegExp(r'^[^@]+@[^@]+\.[^@]+')
-                                    .hasMatch(v)) {
+                                if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
                                   return 'อีเมลไม่ถูกต้อง';
                                 }
                                 return null;
                               },
-                              onSaved: (v) => email = v ?? '',
+                              onSaved: (v) => email = v!.trim(),
                             ),
                             const SizedBox(height: 16),
-
-                            // 2️⃣ ชื่อ-นามสกุล
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: 'ชื่อ-นามสกุล',
@@ -125,15 +107,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              style: TextStyle(color: themeBlue),
-                              validator: (v) => (v == null || v.isEmpty)
-                                  ? 'กรุณากรอกชื่อ-นามสกุล'
-                                  : null,
-                              onSaved: (v) => fullName = v ?? '',
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? 'กรุณากรอกชื่อ-นามสกุล' : null,
+                              onSaved: (v) => fullName = v!.trim(),
                             ),
                             const SizedBox(height: 16),
-
-                            // 3️⃣ ชื่อผู้ใช้
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: 'ชื่อผู้ใช้',
@@ -142,15 +120,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              style: TextStyle(color: themeBlue),
-                              validator: (v) => (v == null || v.isEmpty)
-                                  ? 'กรุณากรอกชื่อผู้ใช้'
-                                  : null,
-                              onSaved: (v) => username = v ?? '',
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? 'กรุณากรอกชื่อผู้ใช้' : null,
+                              onSaved: (v) => username = v!.trim(),
                             ),
                             const SizedBox(height: 16),
-
-                            // 4️⃣ รหัสผ่าน
                             TextFormField(
                               obscureText: _obscure,
                               decoration: InputDecoration(
@@ -161,19 +135,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
-                                    _obscure
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
-                                    color: themeBlue,
-                                  ),
+                                      _obscure
+                                          ? Icons.visibility
+                                          : Icons.visibility_off,
+                                      color: themeBlue),
                                   onPressed: () {
-                                    setState(() {
-                                      _obscure = !_obscure;
-                                    });
+                                    setState(() => _obscure = !_obscure);
                                   },
                                 ),
                               ),
-                              style: TextStyle(color: themeBlue),
                               validator: (v) {
                                 if (v == null || v.isEmpty) {
                                   return 'กรุณากรอกรหัสผ่าน';
@@ -183,11 +153,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 }
                                 return null;
                               },
-                              onSaved: (v) => password = v ?? '',
+                              onSaved: (v) => password = v!.trim(),
                             ),
                             const SizedBox(height: 24),
-
-                            // ปุ่มสมัครสมาชิก
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
@@ -196,59 +164,45 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
                                 ),
-                                onPressed: () {
+                                onPressed: () async {
                                   if (_formKey.currentState!.validate()) {
                                     _formKey.currentState!.save();
-
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content:
-                                              Text('สมัครสมาชิกสำเร็จ!')),
+                                    showDialog(
+                                      context: context,
+                                      barrierDismissible: false,
+                                      builder: (_) => const Center(
+                                          child: CircularProgressIndicator()),
                                     );
-
+                                    final result = await AuthService.register(
+                                      email: email,
+                                      fullname: fullName,
+                                      username: username,
+                                      password: password,
+                                    );
                                     Navigator.pop(context);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(result['message'] ??
+                                              'เกิดข้อผิดพลาด')),
+                                    );
+                                    if (result['success'] == true) {
+                                      Navigator.pop(context);
+                                    }
                                   }
                                 },
-                                child: const Text(
-                                  'Register',
-                                  style: TextStyle(
-                                      fontSize: 18, color: Colors.white),
-                                ),
+                                child: const Text('Register',
+                                    style: TextStyle(
+                                        fontSize: 18, color: Colors.white)),
                               ),
                             ),
                             const SizedBox(height: 12),
-
-                            // ลิงก์ไปหน้า Login
-                            RichText(
-                              text: TextSpan(
-                                text: 'Already have an account? ',
-                                style: TextStyle(
-                                  color: themeBlue,
-                                  fontSize: 16,
-                                ),
-                                children: [
-                                  WidgetSpan(
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                      },
-                                      child: Text(
-                                        'Login',
-                                        style: TextStyle(
-                                          color: themeBlue.withOpacity(0.9),
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('กลับไปหน้าเข้าสู่ระบบ'),
                             ),
-                            const SizedBox(height: 40), // ✅ เผื่อพื้นที่ล่างสุด
+                            const SizedBox(height: 40),
                           ],
                         ),
                       ),
