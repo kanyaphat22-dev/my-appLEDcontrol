@@ -22,7 +22,7 @@ class _FloorBodyState extends State<FloorBody> {
   void initState() {
     super.initState();
     _loadFavorites();
-    _checkLoginStatus(); // ✅ ตรวจว่าเพิ่งล็อกอินไหม
+    _checkLoginStatus();
   }
 
   Future<void> _checkLoginStatus() async {
@@ -31,8 +31,6 @@ class _FloorBodyState extends State<FloorBody> {
 
     if (justLoggedIn) {
       _showLoginNotification();
-
-      // 🔹 รีเซ็ตค่าเพื่อไม่ให้แสดงอีกตอนเข้าใหม่
       prefs.setBool('justLoggedIn', false);
     }
   }
@@ -68,11 +66,12 @@ class _FloorBodyState extends State<FloorBody> {
 
     return SafeArea(
       top: true,
-      bottom: false,
+      bottom: true,
       child: Stack(
         children: [
           CustomScrollView(
             key: const PageStorageKey('FloorBody'),
+            physics: const BouncingScrollPhysics(),
             slivers: [
               // 🔹 หัวข้อ My Home
               SliverToBoxAdapter(
@@ -80,7 +79,12 @@ class _FloorBodyState extends State<FloorBody> {
                   padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
                   child: const Text(
                     'My Home',
-                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
               ),
@@ -109,20 +113,19 @@ class _FloorBodyState extends State<FloorBody> {
                   padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
                   child: Text(
                     'อาคารศรีวิศววิทยา',
-                    style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
 
               // 🔹 Grid รายการชั้น
               SliverPadding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 60),
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 30,
-                    mainAxisSpacing: 30,
+                    mainAxisSpacing: 35,
                     childAspectRatio: 1,
                   ),
                   delegate: SliverChildBuilderDelegate(
@@ -138,6 +141,7 @@ class _FloorBodyState extends State<FloorBody> {
                                 arguments: floors[index]);
                           },
                           child: Container(
+                            clipBehavior: Clip.antiAlias,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               color: Colors.white,
@@ -151,27 +155,34 @@ class _FloorBodyState extends State<FloorBody> {
                             ),
                             child: Stack(
                               children: [
+                                // ✅ ป้องกัน overflow ด้วย FittedBox
                                 Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.asset(
-                                          floorImages[index],
-                                          width: 90,
-                                          height: 90,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          child: Image.asset(
+                                            floorImages[index],
+                                            width: 90,
+                                            height: 90,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        floors[index],
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.normal,
+                                        const SizedBox(height: 6), // 🔹 ลดช่องว่างลง
+                                        Text(
+                                          floors[index],
+                                          style: const TextStyle(
+                                            fontSize: 16, // ✅ ปรับขนาดฟอนต์ให้เล็กลง
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.black87,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 Positioned(
@@ -187,7 +198,7 @@ class _FloorBodyState extends State<FloorBody> {
                                           ? const Color.fromARGB(
                                               255, 134, 229, 248)
                                           : Colors.grey,
-                                      size: 28,
+                                      size: 26, // 🔹 ลดขนาดไอคอนให้สมดุลกับฟอนต์
                                     ),
                                   ),
                                 ),
@@ -204,12 +215,12 @@ class _FloorBodyState extends State<FloorBody> {
 
               // 🔹 Spacer ด้านล่าง
               SliverToBoxAdapter(
-                child: SizedBox(height: bottomInset + 10),
+                child: SizedBox(height: bottomInset + 20),
               ),
             ],
           ),
 
-          // ✅ แจ้งเตือนเข้าสู่ระบบสำเร็จ (ฟอนต์เล็กลง และไม่มีไอคอน)
+          // ✅ แจ้งเตือนเข้าสู่ระบบสำเร็จ
           if (_showLoginSuccess)
             Positioned(
               top: 85,
@@ -238,7 +249,7 @@ class _FloorBodyState extends State<FloorBody> {
                       'เข้าสู่ระบบสำเร็จ',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 15, // 🔹 ฟอนต์เล็กลง
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.5,
                       ),

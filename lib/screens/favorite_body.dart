@@ -55,7 +55,7 @@ class _FavoriteBodyState extends State<FavoriteBody> {
                 'รายการโปรด',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 26,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   height: 1.0,
                 ),
@@ -71,14 +71,14 @@ class _FavoriteBodyState extends State<FavoriteBody> {
                   child: Text(
                     'ยังไม่มีรายการโปรด',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       color: Colors.grey[600],
                     ),
                   ),
                 )
               : ListView.builder(
                   key: const PageStorageKey('FavoriteBody'),
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   itemCount: favoriteData.length,
                   itemBuilder: (context, index) {
                     final floorName = favoriteData[index].value;
@@ -126,7 +126,7 @@ class _FavoriteBodyState extends State<FavoriteBody> {
                                 child: Text(
                                   floorName,
                                   style: const TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),

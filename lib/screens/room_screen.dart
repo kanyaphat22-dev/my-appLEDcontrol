@@ -20,10 +20,11 @@ class RoomScreen extends StatelessWidget {
       } else if (floorNumber == 2) {
         rooms = [
           {'label': 'หน้าลิฟท์', 'value': 'F2_Lift'},
-          {'label': 'ห้องสโมสร', 'value': 'F2_Club'},
-          {'label': 'ห้องชมรมดนตรี', 'value': 'F2_MusicRoom'},
-          {'label': 'ทางเดินหน้าห้อง', 'value': 'F2_Corridor'},
-          {'label': 'บริเวณโรงอาหาร', 'value': 'F2_Canteen'},
+    {'label': 'โถงหน้าลิฟท์', 'value': 'F2_Hall'}, // ✅ เพิ่มบรรทัดนี้
+    {'label': 'ห้องสโมสร', 'value': 'F2_Club'},
+    {'label': 'ห้องชมรมดนตรี', 'value': 'F2_MusicRoom'},
+    {'label': 'ทางเดินหน้าห้อง', 'value': 'F2_Corridor'},
+    {'label': 'บริเวณโรงอาหาร', 'value': 'F2_Canteen'},
         ];
       } else if (floorNumber == 3) {
         rooms = [

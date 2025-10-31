@@ -26,41 +26,28 @@ class _SettingsBodyState extends State<SettingsBody> {
     _loadUsernameAndFetchUserInfo();
   }
 
-  // ✅ โหลด username จาก SharedPreferences แล้วไปดึงข้อมูลจาก API
   Future<void> _loadUsernameAndFetchUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
     final savedUsername = prefs.getString('username');
 
     if (savedUsername != null && savedUsername.isNotEmpty) {
       setState(() => username = savedUsername);
-      debugPrint("✅ โหลด username จาก SharedPreferences: $username");
       _fetchUserInfo(savedUsername);
-    } else {
-      debugPrint("⚠️ ไม่พบ username ใน SharedPreferences");
     }
   }
 
-  // ✅ ดึงข้อมูล email จากเซิร์ฟเวอร์
   Future<void> _fetchUserInfo(String username) async {
     try {
       final url = "$baseUrl/get_user_info.php?username=$username";
-      debugPrint("🌐 GET → $url");
-
       final response = await http.get(Uri.parse(url));
-      debugPrint("📩 Response → ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-
         if (data["success"] == true) {
           setState(() {
             email = data["email"] ?? "-";
           });
-        } else {
-          debugPrint("⚠️ ${data["message"]}");
         }
-      } else {
-        debugPrint("⚠️ Server Error: ${response.statusCode}");
       }
     } catch (e) {
       debugPrint("❌ Error fetching user info: $e");
@@ -87,7 +74,7 @@ class _SettingsBodyState extends State<SettingsBody> {
                     'การตั้งค่า',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 26,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       height: 1.0,
                     ),
@@ -116,6 +103,7 @@ class _SettingsBodyState extends State<SettingsBody> {
                       ],
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const CircleAvatar(
                           radius: 28,
@@ -124,6 +112,8 @@ class _SettingsBodyState extends State<SettingsBody> {
                               Icon(Icons.person, color: Colors.white, size: 32),
                         ),
                         const SizedBox(width: 16),
+
+                        // 🔹 ข้อมูลผู้ใช้
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,18 +121,26 @@ class _SettingsBodyState extends State<SettingsBody> {
                               Text(
                                 username.isEmpty ? "กำลังโหลด..." : username,
                                 style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
                                 ),
                               ),
+                              const SizedBox(height: 2),
                               Text(
                                 email,
-                                style: const TextStyle(color: Colors.grey),
+                                overflow: TextOverflow.ellipsis, // ✅ ตัดข้อความด้วย …
+                                softWrap: false, // ✅ ห้ามขึ้นบรรทัดใหม่
+                                maxLines: 1, // ✅ จำกัดบรรทัดเดียวเท่านั้น
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 13,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                        const Icon(Icons.edit, color: Colors.grey),
+                        const Icon(Icons.edit, color: Colors.grey, size: 20),
                       ],
                     ),
                   ),
@@ -205,10 +203,10 @@ class _SettingsBodyState extends State<SettingsBody> {
                   );
                 }
               },
-              icon: const Icon(Icons.logout),
+              icon: const Icon(Icons.logout, size: 20),
               label: const Text(
                 "ออกจากระบบ",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -279,7 +277,6 @@ class _SettingsBodyState extends State<SettingsBody> {
   Future<void> _sendLogoutToServer() async {
     try {
       await http.get(Uri.parse(logoutApiUrl));
-      debugPrint("📤 Logout sent to server successfully.");
     } catch (e) {
       debugPrint("❌ Error sending logout: $e");
     }

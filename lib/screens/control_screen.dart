@@ -34,6 +34,7 @@ class _ControlScreenState extends State<ControlScreen> {
   final GlobalKey _buttonKey = GlobalKey();
 
   List<Map<String, dynamic>> _webSchedules = [];
+  List<String> selectedDays = []; // ✅ เก็บวันที่ทำงาน (Mon–Sun)
 
   @override
   void didChangeDependencies() {
@@ -42,7 +43,7 @@ class _ControlScreenState extends State<ControlScreen> {
       final args = ModalRoute.of(context)!.settings.arguments as Map;
       floor = args['floor'] as String;
       room = args['room'] as String;
-      roomKey = "${floor}_${room}";
+      roomKey = room;
       dualMode = room.contains("Hall") || room.contains("Corridor");
       _loadSavedTimesAndStatus();
     }
@@ -51,6 +52,9 @@ class _ControlScreenState extends State<ControlScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _fetchLightStatusFromESP32();
+    });
     statusTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       if (!mounted) return;
       await _fetchLightStatusFromESP32();
@@ -67,7 +71,6 @@ class _ControlScreenState extends State<ControlScreen> {
     super.dispose();
   }
 
-  // ===== โหลดสถานะไฟ =====
   Future<void> _fetchLightStatusFromESP32() async {
     try {
       if (dualMode) {
@@ -84,11 +87,16 @@ class _ControlScreenState extends State<ControlScreen> {
     } catch (_) {}
   }
 
-  // ===== โหลดเวลาที่เคยบันทึก =====
   Future<void> _loadSavedTimesAndStatus() async {
     final prefs = await SharedPreferences.getInstance();
-
     selectedSwitch = prefs.getString('${roomKey}_selectedSwitch') ?? "SW1";
+
+    // ✅ โหลดวันทำงานที่บันทึกไว้
+    final daysString = prefs.getString('${roomKey}_selectedDays');
+    if (daysString != null && daysString.isNotEmpty) {
+      selectedDays = daysString.split(',');
+    }
+
     final onHour = prefs.getInt('${roomKey}_onHour');
     final onMinute = prefs.getInt('${roomKey}_onMinute');
     final offHour = prefs.getInt('${roomKey}_offHour');
@@ -101,41 +109,38 @@ class _ControlScreenState extends State<ControlScreen> {
       scheduledOffTime = TimeOfDay(hour: offHour, minute: offMinute);
     }
 
-    // 🔹 ล้างเวลาเก่าที่หมดอายุ
     final now = DateTime.now();
     if (scheduledOffTime != null) {
-      final off = DateTime(now.year, now.month, now.day, scheduledOffTime!.hour, scheduledOffTime!.minute);
-      if (off.isBefore(now)) {
-        await _clearSavedTimes();
-      }
+      final off = DateTime(now.year, now.month, now.day,
+          scheduledOffTime!.hour, scheduledOffTime!.minute);
+      if (off.isBefore(now)) await _clearSavedTimes();
     }
-
     _scheduleTimers();
   }
 
-  // ===== ล้างเวลาใน SharedPreferences =====
   Future<void> _clearSavedTimes() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('${roomKey}_onHour');
     await prefs.remove('${roomKey}_onMinute');
     await prefs.remove('${roomKey}_offHour');
     await prefs.remove('${roomKey}_offMinute');
+    await prefs.remove('${roomKey}_selectedDays');
     setState(() {
       scheduledOnTime = null;
       scheduledOffTime = null;
+      selectedDays.clear();
     });
   }
 
-  // ===== โหลดตารางเวลาจากเว็บ =====
   Future<void> _loadWebSchedules() async {
     final list = await ESP32Service.getSchedules(roomKey);
     setState(() => _webSchedules = list);
   }
 
-  // ===== บันทึกเวลา =====
   Future<void> _saveTimes() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString('${roomKey}_selectedSwitch', selectedSwitch);
+    prefs.setString('${roomKey}_selectedDays', selectedDays.join(','));
 
     if (scheduledOnTime != null && scheduledOffTime != null) {
       prefs.setInt('${roomKey}_onHour', scheduledOnTime!.hour);
@@ -143,50 +148,76 @@ class _ControlScreenState extends State<ControlScreen> {
       prefs.setInt('${roomKey}_offHour', scheduledOffTime!.hour);
       prefs.setInt('${roomKey}_offMinute', scheduledOffTime!.minute);
 
-      final start = "${scheduledOnTime!.hour.toString().padLeft(2, '0')}:${scheduledOnTime!.minute.toString().padLeft(2, '0')}:00";
-      final end = "${scheduledOffTime!.hour.toString().padLeft(2, '0')}:${scheduledOffTime!.minute.toString().padLeft(2, '0')}:00";
+      final start =
+          "${scheduledOnTime!.hour.toString().padLeft(2, '0')}:${scheduledOnTime!.minute.toString().padLeft(2, '0')}:00";
+      final end =
+          "${scheduledOffTime!.hour.toString().padLeft(2, '0')}:${scheduledOffTime!.minute.toString().padLeft(2, '0')}:00";
 
       await ESP32Service.setSchedule(
         roomKey: roomKey,
         mode: "auto",
         startTime: start,
         endTime: end,
+        weekdays: selectedDays.join(','), // ✅ ส่งวันทำงาน
       );
       await _loadWebSchedules();
     }
   }
 
-  // ===== ตั้งเวลาในแอป =====
   void _scheduleTimers() {
     onTimer?.cancel();
     offTimer?.cancel();
-
     final now = DateTime.now();
 
     if (scheduledOnTime != null) {
-      final onDateTime = DateTime(now.year, now.month, now.day, scheduledOnTime!.hour, scheduledOnTime!.minute);
+      final onDateTime = DateTime(now.year, now.month, now.day,
+          scheduledOnTime!.hour, scheduledOnTime!.minute);
       final onDelay = onDateTime.isBefore(now)
           ? onDateTime.add(const Duration(days: 1)).difference(now)
           : onDateTime.difference(now);
-      onTimer = Timer(onDelay, () => _sendCommand(true, fixedIndex: selectedSwitch == "SW1" ? 1 : 2));
+      onTimer = Timer(onDelay, () => _sendCommand(true));
     }
 
     if (scheduledOffTime != null) {
-      final offDateTime = DateTime(now.year, now.month, now.day, scheduledOffTime!.hour, scheduledOffTime!.minute);
+      final offDateTime = DateTime(now.year, now.month, now.day,
+          scheduledOffTime!.hour, scheduledOffTime!.minute);
       final offDelay = offDateTime.isBefore(now)
           ? offDateTime.add(const Duration(days: 1)).difference(now)
           : offDateTime.difference(now);
-      offTimer = Timer(offDelay, () => _sendCommand(false, fixedIndex: selectedSwitch == "SW1" ? 1 : 2));
+      offTimer = Timer(offDelay, () => _sendCommand(false));
     }
   }
 
   Future<void> _sendCommand(bool turnOn, {int? fixedIndex}) async {
     if (dualMode) {
-      int index = fixedIndex ?? (selectedSwitch == "SW1" ? 1 : 2);
-      await ESP32Service.sendCommand("${roomKey}_$index", turnOn);
-      setState(() {
-        if (index == 1) lightOn1 = turnOn; else lightOn2 = turnOn;
-      });
+      if (fixedIndex != null) {
+        await ESP32Service.sendCommand("${roomKey}_$fixedIndex", turnOn);
+        setState(() {
+          if (fixedIndex == 1)
+            lightOn1 = turnOn;
+          else
+            lightOn2 = turnOn;
+        });
+        return;
+      }
+
+      if (selectedSwitch == "SW1+SW2") {
+        await ESP32Service.sendCommand("${roomKey}_1", turnOn);
+        await ESP32Service.sendCommand("${roomKey}_2", turnOn);
+        setState(() {
+          lightOn1 = turnOn;
+          lightOn2 = turnOn;
+        });
+      } else {
+        int index = selectedSwitch == "SW1" ? 1 : 2;
+        await ESP32Service.sendCommand("${roomKey}_$index", turnOn);
+        setState(() {
+          if (index == 1)
+            lightOn1 = turnOn;
+          else
+            lightOn2 = turnOn;
+        });
+      }
     } else {
       await ESP32Service.sendCommand(roomKey, turnOn);
       setState(() => lightOn1 = turnOn);
@@ -235,7 +266,9 @@ class _ControlScreenState extends State<ControlScreen> {
             Navigator.pop(context);
           },
         ),
-        title: Text('ควบคุมไฟ - $floor $room', style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w500)),
+        title: Text('ควบคุมไฟ - $floor $room',
+            style:
+                GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.w500)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -252,7 +285,6 @@ class _ControlScreenState extends State<ControlScreen> {
     );
   }
 
-  // ====== ส่วน UI ======
   Widget _buildLightPanel() {
     return Container(
       width: double.infinity,
@@ -261,7 +293,9 @@ class _ControlScreenState extends State<ControlScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))
+        ],
       ),
       child: dualMode
           ? Row(
@@ -283,14 +317,19 @@ class _ControlScreenState extends State<ControlScreen> {
             color: lightOn ? Colors.yellow[600] : Colors.grey[400], size: 110),
         const SizedBox(height: 20),
         OutlinedButton(
-          onPressed: () => _sendCommand(index == 1 ? !lightOn1 : !lightOn2, fixedIndex: index),
+          onPressed: () =>
+              _sendCommand(index == 1 ? !lightOn1 : !lightOn2, fixedIndex: index),
           style: OutlinedButton.styleFrom(
-            side: BorderSide(color: lightOn ? Colors.lightBlue : Colors.grey, width: 2),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            side: BorderSide(
+                color: lightOn ? Colors.lightBlue : Colors.grey, width: 2),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           child: Text(
             lightOn ? 'ปิดไฟ $index' : 'เปิดไฟ $index',
-            style: GoogleFonts.prompt(fontSize: 16, color: lightOn ? Colors.lightBlue : Colors.grey),
+            style: GoogleFonts.prompt(
+                fontSize: 16,
+                color: lightOn ? Colors.lightBlue : Colors.grey),
           ),
         ),
       ],
@@ -308,22 +347,118 @@ class _ControlScreenState extends State<ControlScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(child: Text('ตั้งเวลาควบคุมไฟ', style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w600))),
+          Center(
+              child: Text('ตั้งเวลาควบคุมไฟ',
+                  style: GoogleFonts.prompt(
+                      fontSize: 16, fontWeight: FontWeight.w600))),
           const SizedBox(height: 16),
-          Text('กรุณาเลือกสวิทช์', style: GoogleFonts.prompt(fontSize: 16, color: Colors.grey[700])),
-          const SizedBox(height: 8),
-          _buildSwitchSelector(),
-          const SizedBox(height: 20),
-          ListTile(
-            title: Text('เวลาเปิดไฟ: ${formatTime(scheduledOnTime)}'),
-            trailing: const Icon(Icons.access_time),
-            onTap: () => pickTime(context, true),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('กรุณาเลือกสวิตช์',
+                  style:
+                      GoogleFonts.prompt(fontSize: 14, color: Colors.grey[700])),
+              SizedBox(width: 100, child: _buildSwitchSelector()),
+            ],
+          ),
+         const SizedBox(height: 14),
+Text('เลือกวันที่ทำงาน',
+    style: GoogleFonts.prompt(fontSize: 14, color: Colors.grey[700])),
+const SizedBox(height: 6),
+SingleChildScrollView(
+  scrollDirection: Axis.horizontal,
+  child: Row(
+    children: [
+      for (var day in [
+        {'key': 'Mon', 'label': 'จ.'},
+        {'key': 'Tue', 'label': 'อ.'},
+        {'key': 'Wed', 'label': 'พ.'},
+        {'key': 'Thu', 'label': 'พฤ.'},
+        {'key': 'Fri', 'label': 'ศ.'},
+        {'key': 'Sat', 'label': 'ส.'},
+        {'key': 'Sun', 'label': 'อา.'},
+      ])
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5), // 🔹 ปรับให้ชิดขึ้น
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                if (selectedDays.contains(day['key'])) {
+                  selectedDays.remove(day['key']);
+                } else {
+                  selectedDays.add(day['key']!);
+                }
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(
+                  vertical: 4, horizontal: 6), // 🔹 ขนาดเล็กลง
+              decoration: BoxDecoration(
+                color: selectedDays.contains(day['key'])
+                    ? Colors.lightBlue // ✅ สีพื้นหลังเมื่อเลือก
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: selectedDays.contains(day['key'])
+                        ? Colors.lightBlue
+                        : Colors.grey.shade400,
+                    width: 1),
+                boxShadow: [
+                  if (selectedDays.contains(day['key']))
+                    const BoxShadow(
+                        color: Colors.black12, blurRadius: 4, offset: Offset(0, 1))
+                ],
+              ),
+              child: Text(
+                day['label']!,
+                style: GoogleFonts.prompt(
+                  fontSize: 10, // 🔹 ฟอนต์เล็กลง
+                  color: selectedDays.contains(day['key'])
+                      ? Colors.white
+                      : Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  ),
+),
+
+          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('เวลาเปิดไฟ: ${formatTime(scheduledOnTime)}',
+                    style:
+                        GoogleFonts.prompt(fontSize: 14, color: Colors.black87)),
+                IconButton(
+                  icon: const Icon(Icons.access_time, color: Colors.lightBlue),
+                  onPressed: () => pickTime(context, true),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
-          ListTile(
-            title: Text('เวลาปิดไฟ: ${formatTime(scheduledOffTime)}'),
-            trailing: const Icon(Icons.access_time),
-            onTap: () => pickTime(context, false),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('เวลาปิดไฟ: ${formatTime(scheduledOffTime)}',
+                    style:
+                        GoogleFonts.prompt(fontSize: 14, color: Colors.black87)),
+                IconButton(
+                  icon: const Icon(Icons.access_time, color: Colors.lightBlue),
+                  onPressed: () => pickTime(context, false),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           _buildSaveButton(),
@@ -343,10 +478,15 @@ class _ControlScreenState extends State<ControlScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("📅 ตารางเวลาเปิด-ปิด", style: GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.w600)),
+          Text("📅 ตารางเวลาเปิด-ปิด",
+              style: GoogleFonts.prompt(
+                  fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           if (_webSchedules.isEmpty)
-            Center(child: Text("ยังไม่มีตารางเวลา", style: GoogleFonts.prompt(fontSize: 16, color: Colors.grey))),
+            Center(
+                child: Text("ยังไม่มีตารางเวลา",
+                    style:
+                        GoogleFonts.prompt(fontSize: 16, color: Colors.grey))),
           ..._webSchedules.map((s) => Container(
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.all(10),
@@ -358,9 +498,20 @@ class _ControlScreenState extends State<ControlScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("${s['start_time']} - ${s['end_time']} (${s['mode']})", style: GoogleFonts.prompt(fontSize: 15)),
-                    Icon(s['enabled'] == 1 ? Icons.check_circle : Icons.cancel,
-                        color: s['enabled'] == 1 ? Colors.green : Colors.red),
+                    Expanded(
+                      child: Text(
+                        "${s['start_time']} - ${s['end_time']} (${s['mode']})",
+                        style: GoogleFonts.prompt(fontSize: 15),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Icon(
+                      s['enabled'] == 1
+                          ? Icons.check_circle
+                          : Icons.cancel,
+                      color:
+                          s['enabled'] == 1 ? Colors.green : Colors.red,
+                    ),
                   ],
                 ),
               )),
@@ -369,7 +520,6 @@ class _ControlScreenState extends State<ControlScreen> {
     );
   }
 
-  // ===== ปุ่มบันทึกเวลา =====
   Widget _buildSaveButton() {
     return ElevatedButton(
       onPressed: () async {
@@ -379,9 +529,14 @@ class _ControlScreenState extends State<ControlScreen> {
             backgroundColor: Colors.lightBlue,
             content: Row(
               children: [
-                const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white)),
+                const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 3, color: Colors.white)),
                 const SizedBox(width: 16),
-                Text('กำลังบันทึกเวลา...', style: GoogleFonts.prompt(color: Colors.white)),
+                Text('กำลังบันทึกเวลา...',
+                    style: GoogleFonts.prompt(color: Colors.white)),
               ],
             ),
           ),
@@ -392,7 +547,8 @@ class _ControlScreenState extends State<ControlScreen> {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ บันทึกเวลาสำเร็จ', style: GoogleFonts.prompt(color: Colors.white)),
+              content: Text('✅ บันทึกเวลาสำเร็จ',
+                  style: GoogleFonts.prompt(color: Colors.white)),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 2),
             ),
@@ -403,17 +559,8 @@ class _ControlScreenState extends State<ControlScreen> {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('❌ บันทึกไม่สำเร็จ: เซิร์ฟเวอร์ไม่ตอบสนอง', style: GoogleFonts.prompt(color: Colors.white)),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        } catch (e) {
-          await _clearSavedTimes();
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ บันทึกไม่สำเร็จ: $e', style: GoogleFonts.prompt(color: Colors.white)),
+              content: Text('❌ เซิร์ฟเวอร์ไม่ตอบสนอง',
+                  style: GoogleFonts.prompt(color: Colors.white)),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 3),
             ),
@@ -422,10 +569,13 @@ class _ControlScreenState extends State<ControlScreen> {
       },
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.lightBlue,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding:
+            const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
       ),
-      child: Text('บันทึกเวลา', style: GoogleFonts.prompt(fontSize: 16, color: Colors.white)),
+      child: Text('บันทึกเวลา',
+          style: GoogleFonts.prompt(fontSize: 16, color: Colors.white)),
     );
   }
 
@@ -440,12 +590,17 @@ class _ControlScreenState extends State<ControlScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.lightBlue.shade300, width: 1.5),
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
+            border:
+                Border.all(color: Colors.lightBlue.shade300, width: 1.5),
+            boxShadow: const [
+              BoxShadow(color: Colors.black12, blurRadius: 8)
+            ],
           ),
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           alignment: Alignment.center,
-          child: Text(selectedSwitch, style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w500)),
+          child: Text(selectedSwitch,
+              style: GoogleFonts.prompt(
+                  fontSize: 8, fontWeight: FontWeight.w500)),
         ),
       ),
     );
@@ -466,34 +621,49 @@ class _ControlScreenState extends State<ControlScreen> {
   }
 
   void _showAnimatedDropdown() {
-    final overlay = Overlay.of(context);
-    final renderBox = _buttonKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-    final position = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
+  final overlay = Overlay.of(context);
+  final renderBox =
+      _buttonKey.currentContext?.findRenderObject() as RenderBox?;
+  if (renderBox == null) return;
 
-    _dropdownOverlay = OverlayEntry(
-      builder: (context) => Positioned(
-        left: position.dx,
-        top: position.dy + size.height + 6,
-        width: size.width,
-        child: _AnimatedDropdownMenu(
-          selected: selectedSwitch,
-          dualMode: dualMode,
-          onSelect: (value) async {
-            setState(() => selectedSwitch = value);
-            await _saveTimes();
-            _removeDropdown();
-          },
+  final position = renderBox.localToGlobal(Offset.zero);
+  final size = renderBox.size;
+
+  _dropdownOverlay = OverlayEntry(
+    builder: (context) => Stack(
+      children: [
+        // ✅ บัง gesture ทั้งหน้า (scroll / tap)
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _removeDropdown, // แตะข้างนอกเพื่อปิด
+            child: Container(color: Colors.transparent),
+          ),
         ),
-      ),
-    );
-    overlay.insert(_dropdownOverlay!);
-    setState(() => _isDropdownVisible = true);
-  }
+        Positioned(
+          left: position.dx,
+          top: position.dy + size.height + 6,
+          width: size.width,
+          child: _AnimatedDropdownMenu(
+            selected: selectedSwitch,
+            dualMode: dualMode,
+            onSelect: (value) async {
+              setState(() => selectedSwitch = value);
+              await _saveTimes();
+              _removeDropdown();
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+
+  overlay.insert(_dropdownOverlay!);
+  setState(() => _isDropdownVisible = true);
 }
 
-// ===== Dropdown Menu =====
+}
+
 class _AnimatedDropdownMenu extends StatefulWidget {
   final String selected;
   final bool dualMode;
@@ -518,7 +688,10 @@ class _AnimatedDropdownMenuState extends State<_AnimatedDropdownMenu>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
     _slide = Tween(begin: const Offset(0, -0.1), end: Offset.zero).animate(_fade);
     _controller.forward();
@@ -532,7 +705,12 @@ class _AnimatedDropdownMenuState extends State<_AnimatedDropdownMenu>
 
   @override
   Widget build(BuildContext context) {
-    final options = ["SW1", if (widget.dualMode) "SW2"];
+    final options = [
+      "SW1",
+      if (widget.dualMode) "SW2",
+      if (widget.dualMode) "SW1+SW2",
+    ];
+
     return Material(
       color: Colors.transparent,
       child: FadeTransition(
@@ -542,31 +720,59 @@ class _AnimatedDropdownMenuState extends State<_AnimatedDropdownMenu>
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3))
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: options.map((e) {
-                final selected = widget.selected == e;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => widget.onSelect(e),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                    width: double.infinity,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(e, style: GoogleFonts.prompt(fontSize: 16)),
-                        if (selected) const Icon(Icons.check, color: Colors.lightBlue),
-                      ],
+              children: [
+                for (int i = 0; i < options.length; i++) ...[
+                  _buildOptionTile(options[i]),
+                  if (i < options.length - 1)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      height: 0.5, // 🔹 เส้นคั่นบางมาก
+                      color: Colors.grey.shade300,
                     ),
-                  ),
-                );
-              }).toList(),
+                ],
+              ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionTile(String e) {
+    final selected = widget.selected == e;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => widget.onSelect(e),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+        alignment: Alignment.centerLeft, // ✅ ชิดซ้าย
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Flexible(
+              child: Text(
+                e,
+                style: GoogleFonts.prompt(
+                  fontSize: 10,
+                  color: selected ? Colors.lightBlue : Colors.black87,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (selected) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.check, color: Colors.lightBlue, size: 14),
+            ],
+          ],
         ),
       ),
     );

@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
+import 'package:flutter/gestures.dart';
+
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -74,7 +76,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             Text(
                               'Register',
                               style: TextStyle(
-                                  fontSize: 28,
+                                  fontSize: 25,
                                   fontWeight: FontWeight.bold,
                                   color: themeBlue),
                             ),
@@ -194,15 +196,38 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 },
                                 child: const Text('Register',
                                     style: TextStyle(
-                                        fontSize: 18, color: Colors.white)),
+                                        fontSize: 16, color: Colors.white)),
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('กลับไปหน้าเข้าสู่ระบบ'),
-                            ),
-                            const SizedBox(height: 40),
+                          const SizedBox(height: 12),
+Center(
+  child: RichText(
+    text: TextSpan(
+      text: "I already have an account  ",
+      style: TextStyle(
+        color: themeBlue,
+        fontSize: 16,
+      ),
+      children: [
+        TextSpan(
+          text: "Login",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: themeBlue,
+            letterSpacing: 1.5,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () {
+              Navigator.pop(context); // ✅ กลับไปหน้า Login
+            },
+        ),
+      ],
+    ),
+  ),
+),
+const SizedBox(height: 40),
+
                           ],
                         ),
                       ),

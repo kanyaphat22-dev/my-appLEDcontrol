@@ -30,7 +30,7 @@ class _NotificationBodyState extends State<NotificationBody> {
                     'การแจ้งเตือน',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 26,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       height: 1.0,
                     ),
