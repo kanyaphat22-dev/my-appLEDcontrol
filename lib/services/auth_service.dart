@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  static const String baseUrl = "http://172.26.30.10/webcontrol/web"; // ✅ เปลี่ยนเป็น URL ของคุณ
+  static const String baseUrl = "http://172.24.13.135/web"; // ✅ เปลี่ยนเป็น URL ของคุณ
 
   static Future<Map<String, dynamic>> login({
     required String username,

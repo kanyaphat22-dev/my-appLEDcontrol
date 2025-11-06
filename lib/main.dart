@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // ✅ เพิ่มบรรทัดนี้
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
@@ -45,6 +46,18 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
+
+      // ✅ เปิดระบบหลายภาษา (ภาษาไทย/อังกฤษ)
+      supportedLocales: const [
+        Locale('en', 'US'),
+        Locale('th', 'TH'), // ✅ เพิ่มไทย
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      locale: const Locale('th', 'TH'), // ✅ กำหนดภาษาเริ่มต้นเป็นไทย
 
       // ✅ ถ้าเคยล็อกอิน → ไปหน้า MainScreen ทันที
       // ✅ ถ้ายังไม่เคย → ไปหน้า SplashScreen

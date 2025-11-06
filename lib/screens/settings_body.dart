@@ -14,8 +14,8 @@ class SettingsBody extends StatefulWidget {
 class _SettingsBodyState extends State<SettingsBody> {
   final String appVersion = "1.0.0";
 
-  final String baseUrl = "http://172.26.30.10/webcontrol/web";
-  final String logoutApiUrl = "http://172.26.30.10/webcontrol/web/logout.php";
+  final String baseUrl = "http://172.24.13.135/web";
+  final String logoutApiUrl = "http://172.24.13.135web/logout.php";
 
   String username = "";
   String email = "-";

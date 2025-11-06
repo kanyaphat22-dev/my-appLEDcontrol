@@ -10,6 +10,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+   
 
   # 🧩 UI และฟอนต์
   cupertino_icons: ^1.0.8
@@ -20,6 +24,7 @@ dependencies:
 
   # 🧩 สำหรับเรียก API เช่น logout.php
   http: ^1.2.0
+
 
 dev_dependencies:
   flutter_test:
@@ -43,4 +48,3 @@ flutter:
     - assets/floor9.png
     - assets/floor10.png
     - assets/engineer.png
-
